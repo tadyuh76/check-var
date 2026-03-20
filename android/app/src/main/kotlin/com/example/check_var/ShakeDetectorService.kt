@@ -11,52 +11,68 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.IBinder
+import android.os.PowerManager
+import android.util.Log
 import kotlin.math.sqrt
 
 class ShakeDetectorService : Service(), SensorEventListener {
-
     companion object {
-        const val CHANNEL_ID = "checkvar_service"
-        const val NOTIFICATION_ID = 1
-        private const val SHAKE_THRESHOLD = 12.0f
-        private const val SHAKE_COOLDOWN_MS = 2000L
-
-        var onShakeDetected: (() -> Unit)? = null
+        private const val TAG = "ShakeDetector"
+        private const val CHANNEL_ID = "checkvar_shake"
+        private const val NOTIFICATION_ID = 1
+        private const val SHAKE_THRESHOLD = 15.0f
+        private const val SHAKE_TIME_WINDOW = 2000L
+        private const val MIN_SHAKE_INTERVAL = 3000L
+        private const val SHAKE_DEBOUNCE = 300L
     }
 
-    private lateinit var sensorManager: SensorManager
+    private var sensorManager: SensorManager? = null
     private var accelerometer: Sensor? = null
-    private var lastShakeTime: Long = 0
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var lastShakeTime = 0L
+    private var shakeCount = 0
+    private var lastDetectionTime = 0L
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        startForeground(NOTIFICATION_ID, buildNotification())
+
+        // Acquire partial wake lock to keep sensor alive when screen is off
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "CheckVar::ShakeDetector"
+        ).apply { acquire() }
+
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = buildNotification()
-        startForeground(NOTIFICATION_ID, notification)
-
+        accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         accelerometer?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+            // Use SENSOR_DELAY_GAME for reliable detection even in background
+            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
 
-        return START_STICKY
+        Log.d(TAG, "Service created, sensor registered, wakeLock acquired")
     }
 
     override fun onDestroy() {
-        sensorManager.unregisterListener(this)
+        sensorManager?.unregisterListener(this)
+        wakeLock?.let {
+            if (it.isHeld) it.release()
+        }
+        wakeLock = null
+        Log.d(TAG, "Service destroyed")
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
+
     override fun onSensorChanged(event: SensorEvent?) {
         event ?: return
-        if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
-
         val x = event.values[0]
         val y = event.values[1]
         val z = event.values[2]
@@ -65,11 +81,23 @@ class ShakeDetectorService : Service(), SensorEventListener {
 
         if (acceleration > SHAKE_THRESHOLD) {
             val now = System.currentTimeMillis()
-            if (now - lastShakeTime > SHAKE_COOLDOWN_MS) {
-                lastShakeTime = now
-                showCheckingNotification()
-                onShakeDetected?.invoke()
+
+            if (now - lastDetectionTime < MIN_SHAKE_INTERVAL) return
+            if (now - lastShakeTime < SHAKE_DEBOUNCE) return
+
+            if (now - lastShakeTime < SHAKE_TIME_WINDOW) {
+                shakeCount++
+                Log.d(TAG, "Shake count: $shakeCount")
+                if (shakeCount >= 3) {
+                    Log.d(TAG, "Triple shake detected!")
+                    shakeCount = 0
+                    lastDetectionTime = now
+                    ServiceBridge.instance.onShakeDetected()
+                }
+            } else {
+                shakeCount = 1
             }
+            lastShakeTime = now
         }
     }
 
@@ -78,10 +106,10 @@ class ShakeDetectorService : Service(), SensorEventListener {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "CheckVar Service",
+            "CheckVar Shake Detection",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "CheckVar shake detection service"
+            description = "Dang theo doi lac dien thoai de kiem tra tin tuc"
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
@@ -89,25 +117,10 @@ class ShakeDetectorService : Service(), SensorEventListener {
 
     private fun buildNotification(): Notification {
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("CheckVar is active")
-            .setContentText("Shake your phone to check")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("CheckVar dang hoat dong")
+            .setContentText("Lac dien thoai 3 lan de kiem tra tin tuc")
+            .setSmallIcon(android.R.drawable.ic_menu_search)
             .setOngoing(true)
             .build()
-    }
-
-    private fun showCheckingNotification() {
-        val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("CheckVar")
-            .setContentText("Checking data...")
-            .setSmallIcon(android.R.drawable.ic_popup_sync)
-            .setOngoing(true)
-            .build()
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(NOTIFICATION_ID, notification)
-
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            manager.notify(NOTIFICATION_ID, buildNotification())
-        }, 5000)
     }
 }
