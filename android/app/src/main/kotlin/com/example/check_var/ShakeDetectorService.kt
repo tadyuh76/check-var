@@ -1,0 +1,126 @@
+package com.example.check_var
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.IBinder
+import android.os.PowerManager
+import android.util.Log
+import kotlin.math.sqrt
+
+class ShakeDetectorService : Service(), SensorEventListener {
+    companion object {
+        private const val TAG = "ShakeDetector"
+        private const val CHANNEL_ID = "checkvar_shake"
+        private const val NOTIFICATION_ID = 1
+        private const val SHAKE_THRESHOLD = 15.0f
+        private const val SHAKE_TIME_WINDOW = 2000L
+        private const val MIN_SHAKE_INTERVAL = 3000L
+        private const val SHAKE_DEBOUNCE = 300L
+    }
+
+    private var sensorManager: SensorManager? = null
+    private var accelerometer: Sensor? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var lastShakeTime = 0L
+    private var shakeCount = 0
+    private var lastDetectionTime = 0L
+
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+        startForeground(NOTIFICATION_ID, buildNotification())
+
+        // Acquire partial wake lock to keep sensor alive when screen is off
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "CheckVar::ShakeDetector"
+        ).apply { acquire() }
+
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        accelerometer?.let {
+            // Use SENSOR_DELAY_GAME for reliable detection even in background
+            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+        }
+
+        Log.d(TAG, "Service created, sensor registered, wakeLock acquired")
+    }
+
+    override fun onDestroy() {
+        sensorManager?.unregisterListener(this)
+        wakeLock?.let {
+            if (it.isHeld) it.release()
+        }
+        wakeLock = null
+        Log.d(TAG, "Service destroyed")
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        event ?: return
+        val x = event.values[0]
+        val y = event.values[1]
+        val z = event.values[2]
+
+        val acceleration = sqrt((x * x + y * y + z * z).toDouble()).toFloat() - SensorManager.GRAVITY_EARTH
+
+        if (acceleration > SHAKE_THRESHOLD) {
+            val now = System.currentTimeMillis()
+
+            if (now - lastDetectionTime < MIN_SHAKE_INTERVAL) return
+            if (now - lastShakeTime < SHAKE_DEBOUNCE) return
+
+            if (now - lastShakeTime < SHAKE_TIME_WINDOW) {
+                shakeCount++
+                Log.d(TAG, "Shake count: $shakeCount")
+                if (shakeCount >= 3) {
+                    Log.d(TAG, "Triple shake detected!")
+                    shakeCount = 0
+                    lastDetectionTime = now
+                    ServiceBridge.instance.onShakeDetected()
+                }
+            } else {
+                shakeCount = 1
+            }
+            lastShakeTime = now
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
+    private fun createNotificationChannel() {
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "CheckVar Shake Detection",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Dang theo doi lac dien thoai de kiem tra tin tuc"
+        }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+    }
+
+    private fun buildNotification(): Notification {
+        return Notification.Builder(this, CHANNEL_ID)
+            .setContentTitle("CheckVar dang hoat dong")
+            .setContentText("Lac dien thoai 3 lan de kiem tra tin tuc")
+            .setSmallIcon(android.R.drawable.ic_menu_search)
+            .setOngoing(true)
+            .build()
+    }
+}
