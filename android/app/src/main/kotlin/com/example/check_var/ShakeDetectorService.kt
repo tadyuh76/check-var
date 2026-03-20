@@ -16,6 +16,7 @@ import android.util.Log
 import kotlin.math.sqrt
 
 class ShakeDetectorService : Service(), SensorEventListener {
+
     companion object {
         private const val TAG = "ShakeDetector"
         private const val CHANNEL_ID = "checkvar_shake"
@@ -24,6 +25,13 @@ class ShakeDetectorService : Service(), SensorEventListener {
         private const val SHAKE_TIME_WINDOW = 2000L
         private const val MIN_SHAKE_INTERVAL = 3000L
         private const val SHAKE_DEBOUNCE = 300L
+
+        /**
+         * Optional callback set by the scam-call ServiceBridge to intercept
+         * shake events for call-mode detection. When set, this fires INSTEAD
+         * of the default ServiceBridge.instance.onShakeDetected() path.
+         */
+        var onShakeDetected: (() -> Unit)? = null
     }
 
     private var sensorManager: SensorManager? = null
@@ -48,7 +56,6 @@ class ShakeDetectorService : Service(), SensorEventListener {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         accelerometer?.let {
-            // Use SENSOR_DELAY_GAME for reliable detection even in background
             sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
 
@@ -92,7 +99,15 @@ class ShakeDetectorService : Service(), SensorEventListener {
                     Log.d(TAG, "Triple shake detected!")
                     shakeCount = 0
                     lastDetectionTime = now
-                    ServiceBridge.instance.onShakeDetected()
+
+                    // If the scam-call layer set a callback, use it;
+                    // otherwise fall through to the news-check path.
+                    val callback = onShakeDetected
+                    if (callback != null) {
+                        callback.invoke()
+                    } else {
+                        ServiceBridge.instance.onShakeDetected()
+                    }
                 }
             } else {
                 shakeCount = 1

@@ -1,7 +1,7 @@
 package com.example.check_var
 
 import android.content.Intent
-import android.os.Bundle
+import android.content.pm.PackageManager
 import android.provider.Settings
 import android.net.Uri
 import io.flutter.embedding.android.FlutterActivity
@@ -10,17 +10,43 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+
     companion object {
-        const val METHOD_CHANNEL = "com.checkvar/methods"
-        const val EVENT_CHANNEL = "com.checkvar/events"
+        /** Channel used by the scam-call Dart PlatformChannel class. */
+        private const val SCAM_CALL_CHANNEL = "com.checkvar/service"
+        /** Channel used by the news-check Dart layer. */
+        private const val NEWS_CHANNEL = "com.checkvar/methods"
+        /** Shared event channel (shake, call_state, transcript, overlay_tap …). */
+        private const val EVENT_CHANNEL = "com.checkvar/events"
+        private const val SPEAKER_TEST_PERMISSIONS = 1003
+
+        const val EXTRA_APP_ACTION = "checkvar_app_action"
+        const val ACTION_OPEN_CALL_DEBUG = "open_call_debug"
+
+        var instance: MainActivity? = null
         var pendingScreenText: String? = null
-        var eventSink: EventChannel.EventSink? = null
     }
+
+    private var pendingPermissionsResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        instance = this
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+        val bridge = ServiceBridge.instance
+        bridge.initialize(this)
+
+        // ── Scam-call method channel (used by Dart PlatformChannel) ─────────
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SCAM_CALL_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "requestSpeakerTestPermissions" -> requestSpeakerTestPermissions(result)
+                    else -> bridge.onScamCallMethod(call, result)
+                }
+            }
+
+        // ── News method channel (used by Dart news-check layer) ─────────────
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NEWS_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "startShakeService" -> {
@@ -35,7 +61,7 @@ class MainActivity : FlutterActivity() {
                     }
                     "setMode" -> {
                         val mode = call.argument<String>("mode") ?: "news"
-                        ServiceBridge.instance.mode = mode
+                        bridge.mode = mode
                         result.success(null)
                     }
                     "getPendingText" -> {
@@ -76,16 +102,77 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        // ── Shared event channel ────────────────────────────────────────────
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                    eventSink = events
+                    bridge.attachEventSink(events)
                 }
                 override fun onCancel(arguments: Any?) {
-                    eventSink = null
+                    bridge.detachEventSink()
                 }
             })
 
-        ServiceBridge.instance.initialize()
+        handleAppActionIntent(intent)
+    }
+
+    // ── Speaker-test runtime permissions ────────────────────────────────────
+
+    private fun requestSpeakerTestPermissions(result: MethodChannel.Result) {
+        val needed = mutableListOf<String>()
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.READ_PHONE_STATE
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            needed.add(android.Manifest.permission.READ_PHONE_STATE)
+        }
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            needed.add(android.Manifest.permission.RECORD_AUDIO)
+        }
+
+        if (needed.isEmpty()) {
+            result.success(true)
+            return
+        }
+
+        pendingPermissionsResult = result
+        androidx.core.app.ActivityCompat.requestPermissions(
+            this, needed.toTypedArray(), SPEAKER_TEST_PERMISSIONS
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == SPEAKER_TEST_PERMISSIONS) {
+            val allGranted = grantResults.isNotEmpty() && grantResults.all {
+                it == PackageManager.PERMISSION_GRANTED
+            }
+            pendingPermissionsResult?.success(allGranted)
+            pendingPermissionsResult = null
+        }
+    }
+
+    // ── Lifecycle ───────────────────────────────────────────────────────────
+
+    override fun onDestroy() {
+        instance = null
+        super.onDestroy()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAppActionIntent(intent)
+    }
+
+    private fun handleAppActionIntent(intent: Intent?) {
+        val action = intent?.getStringExtra(EXTRA_APP_ACTION) ?: return
+        intent.removeExtra(EXTRA_APP_ACTION)
+        ServiceBridge.instance.handleAppAction(action)
     }
 }
