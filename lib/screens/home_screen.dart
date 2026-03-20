@@ -1,5 +1,13 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/platform_channel.dart' as core_channel;
+import '../features/scam_call/live/live_caption_transcript_gateway.dart';
+import '../features/scam_call/live/simulated_call_scenario.dart';
+import '../features/scam_call/scam_call_controller.dart' as feature;
+import '../features/scam_call/scam_call_screen.dart' as feature_screen;
 import '../theme/app_theme.dart';
 import '../providers/home_state_provider.dart';
 import '../services/platform_channel.dart';
@@ -130,10 +138,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _toggleScamCall(bool isEnabled) {
+  Future<void> _toggleScamCall(bool isEnabled) async {
     final provider = context.read<HomeStateProvider>();
-    provider.setScamCallEnabled(!isEnabled);
-    if (!isEnabled) {
+    if (isEnabled) {
+      provider.setScamCallEnabled(false);
+      return;
+    }
+
+    // Turning on — check permissions first.
+    final ready = await _ensureLiveCaptionPermissions();
+    if (!ready || !mounted) return;
+
+    provider.setScamCallEnabled(true);
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Lắc điện thoại 2 lần để kiểm tra'),
@@ -141,6 +158,145 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
       );
     }
+  }
+
+  Future<void> _launchSimulationSheet() async {
+    final ready = await _ensureLiveCaptionPermissions();
+    if (!ready || !mounted) return;
+
+    final scenario = await showModalBottomSheet<SimulatedCallScenario>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _CallSimulationSheet(),
+    );
+    if (!mounted || scenario == null) return;
+
+    final controller = feature.ScamCallController(
+      transcriptGateway: LiveCaptionTranscriptGateway(),
+    );
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => feature_screen.ScamCallScreen(
+          controller: controller,
+          modeLabel: 'Simulation: ${scenario.title}',
+          disposeController: true,
+        ),
+      ),
+    );
+
+    // TTS speaks the script → Live Caption transcribes → pipeline analyzes.
+    unawaited(
+      core_channel.PlatformChannel.speakText(
+        scenario.spokenScript,
+        preferSpeaker: true,
+      ),
+    );
+  }
+
+  /// Pre-flight check: ensures Accessibility Service and Live Caption are
+  /// both enabled before running a simulation. Returns true when ready.
+  Future<bool> _ensureLiveCaptionPermissions() async {
+    // 1. Accessibility Service
+    final hasAccessibility =
+        await PlatformChannel.checkAccessibilityPermission();
+    if (!hasAccessibility) {
+      if (!mounted) return false;
+      final opened = await _showPermissionDialog(
+        title: 'Bật Accessibility Service',
+        content:
+            'CheckVar cần quyền Accessibility để đọc phụ đề từ Live Caption.\n\n'
+            'Vui lòng tìm và bật "CheckVar" trong cài đặt Accessibility.',
+      );
+      if (opened) {
+        _waitingForPermission = true;
+        await PlatformChannel.openAccessibilitySettings();
+        // Wait for user to return from settings.
+        await _waitForResume();
+        // Re-check after returning.
+        final granted =
+            await PlatformChannel.checkAccessibilityPermission();
+        if (!granted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Accessibility Service chưa được bật.'),
+              ),
+            );
+          }
+          return false;
+        }
+      } else {
+        return false;
+      }
+    }
+
+    // 2. Live Caption — informational prompt.
+    //    The `oda_enabled` Settings.Secure check is undocumented and unreliable
+    //    across devices, so we always show instructions and let the user confirm.
+    if (!mounted) return false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Bật Live Caption'),
+        content: const Text(
+          'Live Caption cần được bật để phụ đề cuộc gọi hiển thị.\n\n'
+          'Mở Cài đặt và tìm "Live Caption" trong thanh tìm kiếm, '
+          'sau đó bật lên.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Để sau'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Đã bật'),
+          ),
+        ],
+      ),
+    );
+
+    return confirmed ?? false;
+  }
+
+  Future<bool> _showPermissionDialog({
+    required String title,
+    required String content,
+  }) async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: Text(title),
+            content: Text(content),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Để sau'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Mở cài đặt'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  /// Waits until the app is resumed (user returns from settings).
+  Future<void> _waitForResume() {
+    final completer = Completer<void>();
+    late final _ResumeObserver observer;
+    observer = _ResumeObserver(() {
+      _waitingForPermission = false;
+      WidgetsBinding.instance.removeObserver(observer);
+      if (!completer.isCompleted) completer.complete();
+    });
+    WidgetsBinding.instance.addObserver(observer);
+    return completer.future;
   }
 
   void _showInfoSheet(String title, String description) {
@@ -245,6 +401,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
+            if (kDebugMode) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const Key('home_simulate_call_button'),
+                  onPressed: _launchSimulationSheet,
+                  icon: const Icon(Icons.bug_report_outlined),
+                  label: const Text('Simulate Call'),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
           ],
         ),
@@ -344,6 +512,106 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResumeObserver extends WidgetsBindingObserver {
+  _ResumeObserver(this.onResume);
+
+  final VoidCallback onResume;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      onResume();
+    }
+  }
+}
+
+class _CallSimulationSheet extends StatefulWidget {
+  const _CallSimulationSheet();
+
+  @override
+  State<_CallSimulationSheet> createState() => _CallSimulationSheetState();
+}
+
+class _CallSimulationSheetState extends State<_CallSimulationSheet> {
+  final TextEditingController _customTranscriptController =
+      TextEditingController();
+  SimulatedCallScenario _selectedScenario = SimulatedCallScenario.safeCall;
+
+  @override
+  void dispose() {
+    _customTranscriptController.dispose();
+    super.dispose();
+  }
+
+  void _startSimulation() {
+    final customTranscript = _customTranscriptController.text.trim();
+    final scenario = customTranscript.isNotEmpty
+        ? SimulatedCallScenario.customScript(customTranscript)
+        : _selectedScenario;
+    Navigator.of(context).pop(scenario);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final bottomInset =
+        mediaQuery.viewInsets.bottom > mediaQuery.viewPadding.bottom
+            ? mediaQuery.viewInsets.bottom
+            : mediaQuery.viewPadding.bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottomInset),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Call Simulator',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: SimulatedCallScenario.presets.map((scenario) {
+                return ChoiceChip(
+                  label: Text(scenario.title),
+                  selected: identical(scenario, _selectedScenario),
+                  onSelected: (_) {
+                    setState(() {
+                      _selectedScenario = scenario;
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _customTranscriptController,
+              minLines: 3,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Custom script',
+                hintText: 'Paste the words you want TTS to speak',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _startSimulation,
+                child: const Text('Start Simulation'),
+              ),
+            ),
+          ],
         ),
       ),
     );

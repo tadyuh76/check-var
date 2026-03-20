@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.IBinder
 import android.provider.Settings
 import android.util.TypedValue
@@ -12,133 +13,108 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * Floating overlay that shows live transcript while the user is on their
- * phone app during a call. The overlay is draggable and can be collapsed
- * to a small indicator bubble or expanded to show full transcript text.
+ * Compact verdict-only overlay bubble for scam call detection.
+ *
+ * Shows a color-coded circle indicating the current detection status:
+ *   - Green/Teal = safe
+ *   - Red = scam
+ *   - Amber = suspicious
+ *   - Blue = analyzing
+ *   - Gray = no captions yet / idle
+ *
+ * Tapping the bubble foregrounds the app to show the debug screen.
+ * The bubble is draggable.
  */
 class OverlayBubbleService : Service() {
 
     companion object {
-        fun updateTranscript(text: String) {
-            instance?.setTranscriptText(text)
-        }
-
         private var instance: OverlayBubbleService? = null
+
+        fun updateStatus(sessionStatus: String, threatLevel: String) {
+            instance?.setStatus(sessionStatus, threatLevel)
+        }
     }
 
     private var windowManager: WindowManager? = null
-    private var overlayView: View? = null
-    private var transcriptTextView: TextView? = null
-    private var scrollView: ScrollView? = null
+    private var bubbleView: TextView? = null
     private var layoutParams: WindowManager.LayoutParams? = null
-    private var isExpanded = true
+    private var sessionStatus: String = "idle"
+    private var threatLevel: String = "safe"
 
     override fun onCreate() {
         super.onCreate()
         instance = this
 
-        // SYSTEM_ALERT_WINDOW must be granted; silently skip if not.
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return
         }
 
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        createOverlayView()
+        createBubbleView()
     }
 
     override fun onDestroy() {
-        removeOverlayView()
+        bubbleView?.let { view ->
+            try {
+                windowManager?.removeView(view)
+            } catch (_: Exception) {
+            }
+        }
+        bubbleView = null
         instance = null
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun createOverlayView() {
+    private fun createBubbleView() {
         val density = resources.displayMetrics.density
+        val size = (62 * density).toInt()
 
-        // Root container
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#E6121212")) // Dark semi-transparent
-            setPadding(
-                (12 * density).toInt(),
-                (8 * density).toInt(),
-                (12 * density).toInt(),
-                (8 * density).toInt(),
-            )
-        }
-
-        // Header row: icon + title
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-
-        val title = TextView(this).apply {
-            text = "CheckVar — Listening"
-            setTextColor(Color.parseColor("#00BFA5")) // Teal accent matching app theme
+        val bubble = TextView(this).apply {
+            text = "CV"
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setTypeface(null, Typeface.BOLD)
         }
-        header.addView(title)
-        container.addView(header)
 
-        // Transcript text in a scrollable area
-        scrollView = ScrollView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                (120 * density).toInt(), // Max height for transcript area
-            )
-        }
-
-        transcriptTextView = TextView(this).apply {
-            text = "Waiting for speech..."
-            setTextColor(Color.parseColor("#B3FFFFFF")) // Light white
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setPadding(0, (4 * density).toInt(), 0, 0)
-            maxLines = 8
-        }
-        scrollView!!.addView(transcriptTextView)
-        container.addView(scrollView)
-
-        // Layout params for the overlay window
         layoutParams = WindowManager.LayoutParams(
-            (260 * density).toInt(),
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            size,
+            size,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.END
             x = (16 * density).toInt()
-            y = (100 * density).toInt()
+            y = (132 * density).toInt()
         }
 
-        // Make draggable
-        setupDragBehavior(container)
+        setupTouchBehavior(bubble)
+        bubbleView = bubble
+        setStatus(sessionStatus, threatLevel)
 
-        overlayView = container
         try {
-            windowManager?.addView(container, layoutParams)
-        } catch (e: Exception) {
-            // Overlay permission revoked or other WindowManager error — skip
-            overlayView = null
+            windowManager?.addView(bubble, layoutParams)
+        } catch (_: Exception) {
+            bubbleView = null
             stopSelf()
         }
     }
 
-    private fun setupDragBehavior(view: View) {
+    private fun setupTouchBehavior(view: View) {
         var initialX = 0
         var initialY = 0
         var touchX = 0f
         var touchY = 0f
+        var moved = false
+        val density = resources.displayMetrics.density
+        val dragThreshold = 6 * density
 
         view.setOnTouchListener { _, event ->
             when (event.action) {
@@ -147,12 +123,27 @@ class OverlayBubbleService : Service() {
                     initialY = layoutParams?.y ?: 0
                     touchX = event.rawX
                     touchY = event.rawY
+                    moved = false
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    layoutParams?.x = initialX - (event.rawX - touchX).toInt()
-                    layoutParams?.y = initialY + (event.rawY - touchY).toInt()
-                    windowManager?.updateViewLayout(overlayView, layoutParams)
+                    if (!moved) {
+                        val deltaX = kotlin.math.abs(event.rawX - touchX)
+                        val deltaY = kotlin.math.abs(event.rawY - touchY)
+                        moved = deltaX > dragThreshold || deltaY > dragThreshold
+                    }
+
+                    if (moved) {
+                        layoutParams?.x = initialX - (event.rawX - touchX).toInt()
+                        layoutParams?.y = initialY + (event.rawY - touchY).toInt()
+                        windowManager?.updateViewLayout(bubbleView, layoutParams)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!moved) {
+                        launchDebugScreen()
+                    }
                     true
                 }
                 else -> false
@@ -160,26 +151,47 @@ class OverlayBubbleService : Service() {
         }
     }
 
-    private fun removeOverlayView() {
-        overlayView?.let { view ->
-            try {
-                windowManager?.removeView(view)
-            } catch (_: Exception) {
-                // View may already be removed
+    private fun setStatus(sessionStatus: String, threatLevel: String) {
+        this.sessionStatus = sessionStatus
+        this.threatLevel = threatLevel
+
+        bubbleView?.post {
+            val bubble = bubbleView ?: return@post
+            bubble.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(resolveBubbleColor(sessionStatus, threatLevel))
             }
+            bubble.text = resolveBubbleLabel(sessionStatus, threatLevel)
         }
-        overlayView = null
-        transcriptTextView = null
-        scrollView = null
     }
 
-    private fun setTranscriptText(text: String) {
-        transcriptTextView?.post {
-            transcriptTextView?.text = text
-            // Auto-scroll to bottom
-            scrollView?.post {
-                scrollView?.fullScroll(View.FOCUS_DOWN)
-            }
+    private fun resolveBubbleColor(sessionStatus: String, threatLevel: String): Int {
+        return when {
+            threatLevel == "scam" -> Color.parseColor("#D32F2F")       // Red
+            threatLevel == "suspicious" -> Color.parseColor("#F9A825") // Amber
+            sessionStatus == "error" -> Color.parseColor("#6A1B9A")    // Purple
+            sessionStatus == "reconnecting" -> Color.parseColor("#455A64") // Gray-blue
+            sessionStatus == "analyzing" -> Color.parseColor("#1976D2") // Blue
+            sessionStatus == "listening" -> Color.parseColor("#00897B") // Teal
+            else -> Color.parseColor("#9E9E9E")                        // Gray (idle/no captions)
         }
+    }
+
+    private fun resolveBubbleLabel(sessionStatus: String, threatLevel: String): String {
+        return when {
+            threatLevel == "scam" -> "!!"
+            threatLevel == "suspicious" -> "!?"
+            sessionStatus == "error" -> "X"
+            sessionStatus == "reconnecting" -> "..."
+            sessionStatus == "analyzing" -> "..."
+            else -> "CV"
+        }
+    }
+
+    private fun launchDebugScreen() {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName) ?: return
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        launchIntent.putExtra(MainActivity.EXTRA_APP_ACTION, MainActivity.ACTION_OPEN_CALL_DEBUG)
+        startActivity(launchIntent)
     }
 }

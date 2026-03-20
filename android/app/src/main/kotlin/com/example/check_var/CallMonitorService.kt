@@ -69,14 +69,12 @@ class CallMonitorService : Service() {
     private fun handleCallState(state: Int) {
         val isActive = CallMonitorPolicy.isCallActive(state)
 
-        val event = SpeakerTestLaunch.buildCallActiveEvent(isActive)
+        val event = EventPayloadBuilder.buildCallActiveEvent(isActive)
         onCallStateChanged?.invoke(event)
 
         if (CallMonitorPolicy.shouldHideOverlay(state)) {
             val overlayIntent = Intent(this, OverlayBubbleService::class.java)
             stopService(overlayIntent)
-            val statusBubbleIntent = Intent(this, CallStatusBubbleService::class.java)
-            stopService(statusBubbleIntent)
         }
     }
 

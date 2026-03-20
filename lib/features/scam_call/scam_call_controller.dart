@@ -6,9 +6,9 @@ import '../../core/api/gemini_scam_text_api.dart';
 import '../../core/api/local_scam_classifier.dart';
 import '../../core/platform_channel.dart';
 import '../../models/scam_alert.dart';
-import 'live/agora_live_transcript_gateway.dart';
+import 'live/scam_call_transcript_gateway.dart';
+import 'live/live_caption_transcript_gateway.dart';
 import 'live/live_transcript_models.dart';
-import 'live/platform_speech_live_transcript_gateway.dart';
 
 typedef OverlayVisibilityCallback = Future<void> Function();
 typedef OverlayTranscriptCallback = Future<void> Function(String text);
@@ -43,7 +43,7 @@ class ScamCallController extends ChangeNotifier {
        _classifier = classifier ?? LocalScamClassifier();
 
   static ScamCallTranscriptGateway _buildDefaultTranscriptGateway() {
-    return PlatformSpeechLiveTranscriptGateway();
+    return LiveCaptionTranscriptGateway();
   }
 
   final ScamCallTranscriptGateway _transcriptGateway;
@@ -117,8 +117,7 @@ class ScamCallController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Ensure microphone and overlay permissions are granted before starting.
-      await PlatformChannel.requestSpeakerTestPermissions();
+      // Ensure overlay permission is granted before starting.
       await PlatformChannel.requestOverlayPermission();
 
       await _transcriptSub?.cancel();

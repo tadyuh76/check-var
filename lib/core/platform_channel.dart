@@ -49,7 +49,7 @@ class PlatformChannel {
   }
 
   /// Single shared stream of events from native service.
-  /// Safe to listen from multiple places (ShakeService + PlatformSpeakerTestGateway).
+  /// Safe to listen from multiple places.
   static Stream<Map<String, dynamic>> get shakeEvents {
     _sharedEventStream ??= _eventChannel
         .receiveBroadcastStream()
@@ -58,36 +58,41 @@ class PlatformChannel {
     return _sharedEventStream!;
   }
 
-  // ── Speaker Test Methods ────────────────────────────────────────────────
+  // ── Phone State Permission ──────────────────────────────────────────────
 
-  /// Request READ_PHONE_STATE and RECORD_AUDIO runtime permissions.
-  /// Returns true if all were granted.
-  static Future<bool> requestSpeakerTestPermissions() async {
+  /// Request READ_PHONE_STATE runtime permission.
+  /// Returns true if granted.
+  static Future<bool> requestPhoneStatePermission() async {
     final result = await _methodChannel
-        .invokeMethod<bool>('requestSpeakerTestPermissions');
+        .invokeMethod<bool>('requestPhoneStatePermission');
     return result ?? false;
   }
 
-  /// Get readiness state for the speaker transcription test.
-  static Future<Map<String, dynamic>> getSpeakerTestReadiness() async {
-    final result = await _methodChannel
-        .invokeMapMethod<String, dynamic>('getSpeakerTestReadiness');
-    return result ?? {};
+  // ── Live Caption Capture ────────────────────────────────────────────────
+
+  /// Start forwarding Live Caption text from AccessibilityService.
+  static Future<void> startCaptionCapture() async {
+    await _methodChannel.invokeMethod('startCaptionCapture');
   }
 
-  /// Start on-device speech recognition.
-  static Future<void> startSpeakerRecognition({
-    String language = 'vi-VN',
-  }) async {
-    await _methodChannel.invokeMethod('startSpeakerRecognition', {
-      'language': language,
-    });
+  /// Stop forwarding Live Caption text.
+  static Future<void> stopCaptionCapture() async {
+    await _methodChannel.invokeMethod('stopCaptionCapture');
   }
 
-  /// Stop on-device speech recognition.
-  static Future<void> stopSpeakerRecognition() async {
-    await _methodChannel.invokeMethod('stopSpeakerRecognition');
+  /// Check if Live Caption is enabled in device settings.
+  /// Best-effort check via Settings.Secure (undocumented key).
+  static Future<bool> checkLiveCaptionEnabled() async {
+    final result = await _methodChannel.invokeMethod<bool>('checkLiveCaptionEnabled');
+    return result ?? false;
   }
+
+  /// Open the device's Live Caption settings screen.
+  static Future<void> openLiveCaptionSettings() async {
+    await _methodChannel.invokeMethod('openLiveCaptionSettings');
+  }
+
+  // ── Call Monitor ────────────────────────────────────────────────────────
 
   /// Start the cellular call monitor foreground service.
   static Future<void> startCallMonitorService() async {
@@ -98,6 +103,8 @@ class PlatformChannel {
   static Future<void> stopCallMonitorService() async {
     await _methodChannel.invokeMethod('stopCallMonitorService');
   }
+
+  // ── Overlay ─────────────────────────────────────────────────────────────
 
   /// Request the SYSTEM_ALERT_WINDOW overlay permission.
   static Future<bool> requestOverlayPermission() async {
@@ -116,23 +123,7 @@ class PlatformChannel {
     await _methodChannel.invokeMethod('hideOverlayBubble');
   }
 
-  /// Update the transcript text displayed in the overlay.
-  static Future<void> updateOverlayTranscript(String text) async {
-    await _methodChannel
-        .invokeMethod('updateOverlayTranscript', {'text': text});
-  }
-
-  /// Show the compact status bubble for real call detection.
-  static Future<void> showCallStatusBubble() async {
-    await _methodChannel.invokeMethod('showCallStatusBubble');
-  }
-
-  /// Hide the compact status bubble for real call detection.
-  static Future<void> hideCallStatusBubble() async {
-    await _methodChannel.invokeMethod('hideCallStatusBubble');
-  }
-
-  /// Update the compact overlay bubble status.
+  /// Update the overlay bubble status (verdict color + label).
   static Future<void> updateOverlayStatus({
     required String threatLevel,
     required String sessionStatus,
@@ -142,6 +133,8 @@ class PlatformChannel {
       'sessionStatus': sessionStatus,
     });
   }
+
+  // ── TTS ─────────────────────────────────────────────────────────────────
 
   /// Play [text] aloud using the device's TTS engine.
   static Future<void> speakText(

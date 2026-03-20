@@ -16,9 +16,9 @@ class MainActivity : FlutterActivity() {
         private const val SCAM_CALL_CHANNEL = "com.checkvar/service"
         /** Channel used by the news-check Dart layer. */
         private const val NEWS_CHANNEL = "com.checkvar/methods"
-        /** Shared event channel (shake, call_state, transcript, overlay_tap …). */
+        /** Shared event channel (shake, call_state, caption_text, overlay_tap …). */
         private const val EVENT_CHANNEL = "com.checkvar/events"
-        private const val SPEAKER_TEST_PERMISSIONS = 1003
+        private const val PHONE_STATE_PERMISSION_REQUEST = 1003
 
         const val EXTRA_APP_ACTION = "checkvar_app_action"
         const val ACTION_OPEN_CALL_DEBUG = "open_call_debug"
@@ -40,7 +40,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SCAM_CALL_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "requestSpeakerTestPermissions" -> requestSpeakerTestPermissions(result)
+                    "requestPhoneStatePermission" -> requestPhoneStatePermission(result)
                     else -> bridge.onScamCallMethod(call, result)
                 }
             }
@@ -116,31 +116,22 @@ class MainActivity : FlutterActivity() {
         handleAppActionIntent(intent)
     }
 
-    // ── Speaker-test runtime permissions ────────────────────────────────────
+    // ── Phone state runtime permission ──────────────────────────────────────
 
-    private fun requestSpeakerTestPermissions(result: MethodChannel.Result) {
-        val needed = mutableListOf<String>()
+    private fun requestPhoneStatePermission(result: MethodChannel.Result) {
         if (androidx.core.content.ContextCompat.checkSelfPermission(
                 this, android.Manifest.permission.READ_PHONE_STATE
-            ) != PackageManager.PERMISSION_GRANTED
+            ) == PackageManager.PERMISSION_GRANTED
         ) {
-            needed.add(android.Manifest.permission.READ_PHONE_STATE)
-        }
-        if (androidx.core.content.ContextCompat.checkSelfPermission(
-                this, android.Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            needed.add(android.Manifest.permission.RECORD_AUDIO)
-        }
-
-        if (needed.isEmpty()) {
             result.success(true)
             return
         }
 
         pendingPermissionsResult = result
         androidx.core.app.ActivityCompat.requestPermissions(
-            this, needed.toTypedArray(), SPEAKER_TEST_PERMISSIONS
+            this,
+            arrayOf(android.Manifest.permission.READ_PHONE_STATE),
+            PHONE_STATE_PERMISSION_REQUEST
         )
     }
 
@@ -148,7 +139,7 @@ class MainActivity : FlutterActivity() {
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == SPEAKER_TEST_PERMISSIONS) {
+        if (requestCode == PHONE_STATE_PERMISSION_REQUEST) {
             val allGranted = grantResults.isNotEmpty() && grantResults.all {
                 it == PackageManager.PERMISSION_GRANTED
             }

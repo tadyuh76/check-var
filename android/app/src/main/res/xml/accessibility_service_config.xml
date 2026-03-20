@@ -3,8 +3,9 @@
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canPerformGestures="false"
-    android:canRetrieveWindowContent="false"
+    android:canRetrieveWindowContent="true"
     android:canTakeScreenshot="true"
     android:description="@string/accessibility_description"
     android:notificationTimeout="100"
+    android:packageNames="com.google.android.as"
     android:settingsActivity="com.example.check_var.MainActivity" />

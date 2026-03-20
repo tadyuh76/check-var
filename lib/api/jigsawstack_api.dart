@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'api_keys.dart';
+import '../config/api_keys.dart';
 import '../models/check_result.dart';
 
 /// Regex matching OCR junk: timestamps, status-bar noise, app names,

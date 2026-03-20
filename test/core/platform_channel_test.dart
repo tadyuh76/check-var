@@ -14,6 +14,7 @@ void main() {
           call,
         ) async {
           log.add(call);
+          if (call.method == 'checkLiveCaptionEnabled') return true;
           return null;
         });
   });
@@ -26,10 +27,35 @@ void main() {
         );
   });
 
-  test('startSpeakerRecognition uses Vietnamese by default', () async {
-    await PlatformChannel.startSpeakerRecognition();
+  test('startCaptionCapture invokes the correct method', () async {
+    await PlatformChannel.startCaptionCapture();
 
-    expect(log.single.method, 'startSpeakerRecognition');
-    expect(log.single.arguments, {'language': 'vi-VN'});
+    expect(log.single.method, 'startCaptionCapture');
+  });
+
+  test('stopCaptionCapture invokes the correct method', () async {
+    await PlatformChannel.stopCaptionCapture();
+
+    expect(log.single.method, 'stopCaptionCapture');
+  });
+
+  test('checkLiveCaptionEnabled returns the native result', () async {
+    final result = await PlatformChannel.checkLiveCaptionEnabled();
+
+    expect(log.single.method, 'checkLiveCaptionEnabled');
+    expect(result, isTrue);
+  });
+
+  test('updateOverlayStatus passes threatLevel and sessionStatus', () async {
+    await PlatformChannel.updateOverlayStatus(
+      threatLevel: 'scam',
+      sessionStatus: 'analyzing',
+    );
+
+    expect(log.single.method, 'updateOverlayStatus');
+    expect(log.single.arguments, {
+      'threatLevel': 'scam',
+      'sessionStatus': 'analyzing',
+    });
   });
 }

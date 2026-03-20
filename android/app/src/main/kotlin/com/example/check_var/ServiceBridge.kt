@@ -7,10 +7,8 @@ import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import android.telephony.TelephonyManager
 import android.util.Log
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -19,7 +17,7 @@ import io.flutter.plugin.common.MethodChannel
 /**
  * Unified bridge that handles both:
  *  - News-check shake detection (accessibility OCR)
- *  - Scam-call platform methods (call monitor, TTS, overlays, speech recognition)
+ *  - Scam-call platform methods (call monitor, TTS, overlays, Live Caption capture)
  */
 class ServiceBridge private constructor() {
 
@@ -40,11 +38,15 @@ class ServiceBridge private constructor() {
     private var newsDetectionEnabled: Boolean = false
     private var callDetectionEnabled: Boolean = false
     private var isCallActive: Boolean = false
-    private var speechRecognizerManager: SpeechRecognizerManager? = null
     private var tts: TextToSpeech? = null
     private var speakerRoutingActive: Boolean = false
     private var previousSpeakerphoneState: Boolean? = null
     private var previousAudioMode: Int? = null
+
+    // ── Live Caption capture state ──────────────────────────────────────────
+    /** When true, the AccessibilityService forwards caption events. */
+    var captionCaptureActive: Boolean = false
+        private set
 
     fun initialize(ctx: Context) {
         context = ctx
@@ -134,18 +136,23 @@ class ServiceBridge private constructor() {
                 stopCallMonitor()
                 result.success(true)
             }
-            "getSpeakerTestReadiness" -> {
-                result.success(getSpeakerTestReadiness())
-            }
-            "startSpeakerRecognition" -> {
-                val language = call.argument<String>("language") ?: "vi-VN"
-                startSpeakerRecognition(language)
+            // ── Live Caption capture ────────────────────────────────────
+            "startCaptionCapture" -> {
+                startCaptionCapture()
                 result.success(true)
             }
-            "stopSpeakerRecognition" -> {
-                stopSpeakerRecognition()
+            "stopCaptionCapture" -> {
+                stopCaptionCapture()
                 result.success(true)
             }
+            "checkLiveCaptionEnabled" -> {
+                result.success(checkLiveCaptionEnabled())
+            }
+            "openLiveCaptionSettings" -> {
+                openLiveCaptionSettings()
+                result.success(true)
+            }
+            // ── Overlay ─────────────────────────────────────────────────
             "requestOverlayPermission" -> {
                 val granted = Settings.canDrawOverlays(context)
                 if (!granted) {
@@ -168,27 +175,13 @@ class ServiceBridge private constructor() {
                 context.stopService(intent)
                 result.success(true)
             }
-            "updateOverlayTranscript" -> {
-                val text = call.argument<String>("text") ?: ""
-                OverlayBubbleService.updateTranscript(text)
-                result.success(true)
-            }
-            "showCallStatusBubble" -> {
-                val intent = Intent(context, CallStatusBubbleService::class.java)
-                context.startService(intent)
-                result.success(true)
-            }
-            "hideCallStatusBubble" -> {
-                val intent = Intent(context, CallStatusBubbleService::class.java)
-                context.stopService(intent)
-                result.success(true)
-            }
             "updateOverlayStatus" -> {
                 val threatLevel = call.argument<String>("threatLevel") ?: "safe"
                 val sessionStatus = call.argument<String>("sessionStatus") ?: "idle"
-                CallStatusBubbleService.updateStatus(sessionStatus, threatLevel)
+                OverlayBubbleService.updateStatus(sessionStatus, threatLevel)
                 result.success(true)
             }
+            // ── TTS ─────────────────────────────────────────────────────
             "speakText" -> {
                 val text = call.argument<String>("text") ?: ""
                 val preferSpeaker = call.argument<Boolean>("preferSpeaker") ?: false
@@ -201,6 +194,66 @@ class ServiceBridge private constructor() {
                 result.success(true)
             }
             else -> result.notImplemented()
+        }
+    }
+
+    // ── Live Caption capture methods ────────────────────────────────────────
+
+    private fun startCaptionCapture() {
+        captionCaptureActive = true
+        CheckVarAccessibilityService.instance?.resetCaptionState()
+    }
+
+    private fun stopCaptionCapture() {
+        captionCaptureActive = false
+    }
+
+    /**
+     * Best-effort check for Live Caption being enabled via Settings.Secure.
+     * The key `oda_enabled` is undocumented and may vary across devices.
+     * Returns true if the key is set to "1", false otherwise.
+     */
+    private fun checkLiveCaptionEnabled(): Boolean {
+        return try {
+            val value = Settings.Secure.getString(
+                context.contentResolver, "oda_enabled"
+            )
+            value == "1"
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** Open the device's Live Caption / captioning settings screen. */
+    private fun openLiveCaptionSettings() {
+        // Try intents from most specific to least specific.
+        // ACTION_CAPTIONING_SETTINGS is a standard API that opens caption
+        // preferences, which includes the Live Caption toggle on most devices.
+        val intents = listOf(
+            Intent("android.settings.CAPTIONING_SETTINGS"),
+            Intent(Settings.ACTION_SOUND_SETTINGS),
+            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS),
+        )
+        for (intent in intents) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            try {
+                context.startActivity(intent)
+                return
+            } catch (_: Exception) {
+                // Intent not available on this device, try next.
+            }
+        }
+    }
+
+    /** Called by CheckVarAccessibilityService to emit caption text to Flutter. */
+    fun emitCaptionText(text: String) {
+        mainHandler.post {
+            eventSink?.success(
+                mapOf(
+                    "type" to "caption_text",
+                    "text" to text,
+                )
+            )
         }
     }
 
@@ -276,55 +329,6 @@ class ServiceBridge private constructor() {
         CallMonitorService.onCallStateChanged = null
         val intent = Intent(context, CallMonitorService::class.java)
         context.stopService(intent)
-    }
-
-    private fun getSpeakerTestReadiness(): Map<String, Any> {
-        val hasPhoneStatePermission = androidx.core.content.ContextCompat.checkSelfPermission(
-            context, android.Manifest.permission.READ_PHONE_STATE
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-
-        val hasActiveCall = if (hasPhoneStatePermission) {
-            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-            @Suppress("DEPRECATION")
-            CallMonitorPolicy.isCallActive(tm.callState)
-        } else {
-            false
-        }
-
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
-        val hasMicPermission = androidx.core.content.ContextCompat.checkSelfPermission(
-            context, android.Manifest.permission.RECORD_AUDIO
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-
-        return mapOf(
-            "hasActiveCall" to hasActiveCall,
-            "hasOverlayPermission" to Settings.canDrawOverlays(context),
-            "hasMicrophonePermission" to hasMicPermission,
-            "recognizerAvailable" to SpeechRecognizer.isRecognitionAvailable(context),
-            "isSpeakerphoneOn" to audioManager.isSpeakerphoneOn,
-        )
-    }
-
-    private fun startSpeakerRecognition(language: String = "vi-VN") {
-        val hasMic = androidx.core.content.ContextCompat.checkSelfPermission(
-            context, android.Manifest.permission.RECORD_AUDIO
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!hasMic) return
-
-        if (speechRecognizerManager == null) {
-            speechRecognizerManager = SpeechRecognizerManager(context, language) { event ->
-                mainHandler.post {
-                    eventSink?.success(event)
-                }
-            }
-        }
-        speechRecognizerManager?.start()
-    }
-
-    private fun stopSpeakerRecognition() {
-        speechRecognizerManager?.stop()
-        speechRecognizerManager = null
     }
 
     private fun emitAppAction(action: String) {

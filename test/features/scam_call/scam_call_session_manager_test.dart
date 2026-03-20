@@ -1,16 +1,35 @@
 import 'dart:async';
 
 import 'package:check_var/core/api/gemini_scam_text_api.dart';
-import 'package:check_var/features/scam_call/live/agora_live_transcript_gateway.dart';
+import 'package:check_var/features/scam_call/live/scam_call_transcript_gateway.dart';
 import 'package:check_var/features/scam_call/live/live_transcript_models.dart';
-import 'package:check_var/features/scam_call/live/platform_speech_live_transcript_gateway.dart';
+import 'package:check_var/features/scam_call/live/live_caption_transcript_gateway.dart';
 import 'package:check_var/features/scam_call/live/simulated_call_scenario.dart';
 import 'package:check_var/features/scam_call/scam_call_controller.dart';
 import 'package:check_var/features/scam_call/scam_call_session_manager.dart';
 import 'package:check_var/models/scam_alert.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.checkvar/service'),
+      (call) async => null,
+    );
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.checkvar/service'),
+      null,
+    );
+  });
+
   test('startLiveCallSession creates one shared live controller', () async {
     final liveGateway = _FakeTranscriptGateway();
     var liveFactoryCalls = 0;
@@ -69,10 +88,10 @@ void main() {
     expect(simulationGateway.startCount, 1);
   });
 
-  test('simulation mode uses the platform speech transcript gateway', () {
+  test('simulation mode uses the live caption transcript gateway', () {
     expect(
       ScamCallSessionManager.buildSimulationTranscriptGateway(),
-      isA<PlatformSpeechLiveTranscriptGateway>(),
+      isA<LiveCaptionTranscriptGateway>(),
     );
   });
 }

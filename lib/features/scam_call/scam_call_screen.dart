@@ -306,7 +306,7 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.mic,
+            Icons.closed_caption,
             size: 64,
             color: _controller.isListening
                 ? colorScheme.primary
@@ -315,8 +315,8 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
           const SizedBox(height: 16),
           Text(
             _controller.isListening
-                ? 'Đang nghe cuộc gọi...'
-                : 'Đang bật micro...',
+                ? 'Đang chờ phụ đề...'
+                : 'Đang kết nối Live Caption...',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: colorScheme.onSurface.withValues(alpha: 0.6),
             ),

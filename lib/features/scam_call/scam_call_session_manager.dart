@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/platform_channel.dart';
 import '../../models/scam_alert.dart';
-import 'live/platform_speech_live_transcript_gateway.dart';
+import 'live/live_caption_transcript_gateway.dart';
 import 'live/simulated_call_scenario.dart';
 import 'scam_call_controller.dart';
 
@@ -102,8 +102,8 @@ class ScamCallSessionManager extends ChangeNotifier {
 
   static ScamCallController _buildLiveCallController() {
     return ScamCallController(
-      onOverlayShow: PlatformChannel.showCallStatusBubble,
-      onOverlayHide: PlatformChannel.hideCallStatusBubble,
+      onOverlayShow: PlatformChannel.showOverlayBubble,
+      onOverlayHide: PlatformChannel.hideOverlayBubble,
       onOverlayStatusUpdate: _updateOverlayStatus,
     );
   }
@@ -113,15 +113,15 @@ class ScamCallSessionManager extends ChangeNotifier {
   ) {
     return ScamCallController(
       transcriptGateway: buildSimulationTranscriptGateway(),
-      onOverlayShow: PlatformChannel.showCallStatusBubble,
-      onOverlayHide: PlatformChannel.hideCallStatusBubble,
+      onOverlayShow: PlatformChannel.showOverlayBubble,
+      onOverlayHide: PlatformChannel.hideOverlayBubble,
       onOverlayStatusUpdate: _updateOverlayStatus,
     );
   }
 
   @visibleForTesting
-  static PlatformSpeechLiveTranscriptGateway buildSimulationTranscriptGateway() {
-    return PlatformSpeechLiveTranscriptGateway();
+  static LiveCaptionTranscriptGateway buildSimulationTranscriptGateway() {
+    return LiveCaptionTranscriptGateway();
   }
 
   static Future<void> _updateOverlayStatus(

@@ -1,13 +1,31 @@
 import 'dart:async';
 
 import 'package:check_var/core/api/gemini_scam_text_api.dart';
-import 'package:check_var/features/scam_call/live/agora_live_transcript_gateway.dart';
+import 'package:check_var/features/scam_call/live/scam_call_transcript_gateway.dart';
 import 'package:check_var/features/scam_call/live/live_transcript_models.dart';
 import 'package:check_var/features/scam_call/scam_call_controller.dart';
 import 'package:check_var/models/scam_alert.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.checkvar/service'),
+      (call) async => null,
+    );
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('com.checkvar/service'),
+      null,
+    );
+  });
   test('appends live transcript events and throttles scam analysis', () async {
     final gateway = FakeAgoraLiveTranscriptGateway();
     final classifier = FakeScamTextClassifier(
