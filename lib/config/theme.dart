@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const _seedColor = Color(0xFF00BFA5); // Teal accent
+
+  static const _fontFamily = 'Inter';
 
   static final darkTheme = ThemeData(
     useMaterial3: true,
@@ -13,7 +14,7 @@ class AppTheme {
       surface: const Color(0xFF121212),
     ),
     scaffoldBackgroundColor: const Color(0xFF121212),
-    textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
+    textTheme: ThemeData.dark().textTheme.apply(fontFamily: _fontFamily),
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.transparent,
       elevation: 0,
