@@ -64,6 +64,10 @@ class OverlayBubbleService : Service() {
     private var pulseAnimator: ValueAnimator? = null
     private var collapseRunnable: Runnable? = null
 
+    // ── Initial hint tooltip ──────────────────────────────────────────────────
+    private var hintView: View? = null
+    private var hintDismissRunnable: Runnable? = null
+
     // ── Collapsed views ──────────────────────────────────────────────────────
 
     private var collapsedContainer: FrameLayout? = null
@@ -117,6 +121,9 @@ class OverlayBubbleService : Service() {
     // Auto-collapse delays
     private val WARN_COLLAPSE_MS = 8000L
 
+    // Initial hint tooltip timing
+    private val HINT_DISPLAY_MS = 4000L
+
     // ═════════════════════════════════════════════════════════════════════════
     //  Lifecycle
     // ═════════════════════════════════════════════════════════════════════════
@@ -132,6 +139,9 @@ class OverlayBubbleService : Service() {
     override fun onDestroy() {
         pulseAnimator?.cancel()
         collapseRunnable?.let { handler.removeCallbacks(it) }
+        hintDismissRunnable?.let { handler.removeCallbacks(it) }
+        hintView?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
+        hintView = null
         rootView?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
         rootView = null
         instance = null
@@ -162,7 +172,7 @@ class OverlayBubbleService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.END
             x = dp(16)
-            y = dp(120)
+            y = dp(140)
         }
 
         setupTouch(rootView!!)
@@ -170,6 +180,7 @@ class OverlayBubbleService : Service() {
 
         try {
             windowManager?.addView(rootView, layoutParams)
+            showInitialHint()
         } catch (_: Exception) {
             rootView = null
             stopSelf()
@@ -370,6 +381,9 @@ class OverlayBubbleService : Service() {
 
         // Reset expansion tracking when threat drops back to safe.
         if (newThreat == "safe") expandedForThreat = null
+
+        // Dismiss initial hint once pipeline is active
+        if (newStatus != "idle" && newStatus != "connecting") dismissHint()
 
         rootView?.post {
             val isThreat = newThreat in listOf("suspicious", "scam")
@@ -575,6 +589,67 @@ class OverlayBubbleService : Service() {
         if (threatLevel == "scam") return // scam stays until manually dismissed
         collapseRunnable = Runnable { collapse() }
         handler.postDelayed(collapseRunnable!!, WARN_COLLAPSE_MS)
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  Initial hint tooltip
+    // ═════════════════════════════════════════════════════════════════════════
+
+    private fun showInitialHint() {
+        val hint = TextView(this).apply {
+            text = "Số lạ? Nhấn để kiểm tra lừa đảo"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            setTextColor(0xFF3E3E3E.toInt())
+            setTypeface(null, Typeface.NORMAL)
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+            elevation = dpf(4f)
+            background = GradientDrawable().apply {
+                setColor(0xF0FFFFFF.toInt())
+                cornerRadius = dpf(14f)
+                setStroke(dp(1), 0x18000000)
+            }
+            alpha = 0f
+        }
+
+        val hintLP = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            // Position to the left of the bubble with a small gap
+            x = dp(BUBBLE_DP + 28)
+            y = (layoutParams?.y ?: dp(120)) + dp(18)
+        }
+
+        hintView = hint
+        try {
+            windowManager?.addView(hint, hintLP)
+        } catch (_: Exception) { hintView = null; return }
+
+        // Fade in after a brief delay so the bubble settles first
+        hint.animate().alpha(1f).setDuration(400).setStartDelay(300).start()
+
+        // Auto-dismiss after HINT_DISPLAY_MS
+        hintDismissRunnable = Runnable { dismissHint() }
+        handler.postDelayed(hintDismissRunnable!!, HINT_DISPLAY_MS)
+    }
+
+    private fun dismissHint() {
+        hintDismissRunnable?.let { handler.removeCallbacks(it) }
+        hintDismissRunnable = null
+        val hint = hintView ?: return
+        hint.animate()
+            .alpha(0f)
+            .setDuration(400)
+            .withEndAction {
+                try { windowManager?.removeView(hint) } catch (_: Exception) {}
+            }
+            .start()
+        hintView = null
     }
 
     // ═════════════════════════════════════════════════════════════════════════

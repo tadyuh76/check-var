@@ -16,6 +16,7 @@ class ScamAnalysisResult {
     required this.patterns,
     required this.summary,
     required this.advice,
+    this.scamProbability = 0.0,
   });
 
   final ThreatLevel threatLevel;
@@ -23,6 +24,11 @@ class ScamAnalysisResult {
   final List<String> patterns;
   final String summary;
   final String advice;
+
+  /// Raw probability that the call is a scam, on a consistent 0–1 scale
+  /// (higher = more likely scam).  Unlike [confidence], which inverts for
+  /// safe results, this value is always directly comparable across analyses.
+  final double scamProbability;
 
   ScamAlert toAlert() {
     return ScamAlert(
@@ -133,9 +139,15 @@ $window
         return _fallbackResult();
       }
 
+      final threatLevel = _parseThreatLevel(decoded['threat_level'] as String?);
+      final confidence = (decoded['confidence'] as num?)?.toDouble() ?? 0;
+
       return ScamAnalysisResult(
-        threatLevel: _parseThreatLevel(decoded['threat_level'] as String?),
-        confidence: (decoded['confidence'] as num?)?.toDouble() ?? 0,
+        threatLevel: threatLevel,
+        confidence: confidence,
+        scamProbability: threatLevel == ThreatLevel.safe
+            ? 1.0 - confidence
+            : confidence,
         patterns: (decoded['patterns_detected'] as List<dynamic>? ?? const [])
             .map((pattern) => pattern.toString())
             .toList(),

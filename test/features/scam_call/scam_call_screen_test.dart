@@ -34,6 +34,7 @@ void main() {
         const ScamAnalysisResult(
           threatLevel: ThreatLevel.suspicious,
           confidence: 0.81,
+          scamProbability: 0.81,
           patterns: ['urgency'],
           summary: 'Caller pressures the target to act immediately',
           advice: 'Slow down and verify independently',
@@ -49,11 +50,15 @@ void main() {
         MaterialApp(home: ScamCallScreen(controller: controller)),
       );
 
+      // Two analyses needed for the consecutive gate to pass.
       gateway.emitTranscript('you must act right now');
+      await tester.pump(const Duration(milliseconds: 30));
+      gateway.emitTranscript('send money immediately');
       await tester.pump(const Duration(milliseconds: 30));
 
       expect(find.text('Đang nghe'), findsOneWidget);
-      expect(find.text('ĐÁNG NGỜ'), findsOneWidget);
+      // EMA of 0.81 is above 0.55 with 2 consecutive → scam
+      expect(find.text('LỪA ĐẢO'), findsOneWidget);
       expect(find.text('you must act right now'), findsOneWidget);
       expect(find.text('Slow down and verify independently'), findsOneWidget);
     },

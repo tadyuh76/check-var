@@ -283,7 +283,7 @@ enum ScamType {
 class LocalScamClassifier implements ScamTextClassifier {
   /// [suspiciousThreshold] — gate probability between this and the model's
   /// scam threshold produces a `suspicious` result.
-  LocalScamClassifier({this.suspiciousThreshold = 0.35});
+  LocalScamClassifier({this.suspiciousThreshold = 0.50});
 
   static const _windowCharacters = 600;
 
@@ -423,6 +423,7 @@ class LocalScamClassifier implements ScamTextClassifier {
       return ScamAnalysisResult(
         threatLevel: ThreatLevel.safe,
         confidence: 1.0 - gateProb,
+        scamProbability: gateProb,
         patterns: const [],
         summary: ScamType.safe.displayName,
         advice: ScamType.safe.advice,
@@ -468,6 +469,7 @@ class LocalScamClassifier implements ScamTextClassifier {
     return ScamAnalysisResult(
       threatLevel: effectiveThreat,
       confidence: gateProb,
+      scamProbability: gateProb,
       patterns: [scamType.displayName],
       summary: scamType.displayName,
       advice: scamType.advice,
@@ -549,6 +551,7 @@ class LocalScamClassifier implements ScamTextClassifier {
     return const ScamAnalysisResult(
       threatLevel: ThreatLevel.safe,
       confidence: 0,
+      scamProbability: 0,
       patterns: [],
       summary: 'Không thể phân tích.',
       advice: 'Hãy cẩn thận và xác minh độc lập.',
