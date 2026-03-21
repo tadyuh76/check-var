@@ -174,15 +174,23 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   Widget _buildCallCard(HistoryEntry entry) {
-    final (color, label) = switch (entry.threatLevel) {
-      ThreatLevel.safe => (AppTheme.success, 'An toàn'),
-      ThreatLevel.suspicious => (AppTheme.warning, 'Đáng ngờ'),
-      ThreatLevel.scam => (AppTheme.danger, 'Lừa đảo'),
-    };
+    final bool analyzed = entry.wasAnalyzed;
+
+    final (color, label) = analyzed
+        ? switch (entry.threatLevel) {
+            ThreatLevel.safe => (AppTheme.success, 'An toàn'),
+            ThreatLevel.suspicious => (AppTheme.warning, 'Đáng ngờ'),
+            ThreatLevel.scam => (AppTheme.danger, 'Lừa đảo'),
+          }
+        : (Colors.grey, 'Không phân tích');
+
     final time = _formatTime(entry.timestamp);
-    final patternsText = entry.patterns.isNotEmpty
-        ? 'Phát hiện: ${entry.patterns.join(', ')}'
-        : 'Không phát hiện dấu hiệu bất thường';
+
+    final subtitleText = analyzed
+        ? (entry.patterns.isNotEmpty
+            ? 'Phát hiện: ${entry.patterns.join(', ')}'
+            : 'Không phát hiện dấu hiệu bất thường')
+        : entry.callerNumber ?? 'Số không xác định';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -230,7 +238,7 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                patternsText,
+                subtitleText,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium,
