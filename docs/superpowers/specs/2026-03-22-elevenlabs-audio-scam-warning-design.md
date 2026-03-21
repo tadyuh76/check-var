@@ -26,12 +26,17 @@ Scam-type-specific advice via real-time ElevenLabs TTS. Example: "Công an khôn
 
 User can dismiss by tapping the overlay bubble. Falls back to Android native TTS if ElevenLabs is unavailable.
 
+**Advice text source**: The 41 scam types already have Vietnamese `advice` strings defined in the `ScamType` enum (`local_scam_classifier.dart`). English translations will be added to `assets/scam_advice.json` with schema: `{ "scamTypeId": { "vi": "...", "en": "..." } }`. This file serves as the single source of truth for Phase 2 TTS text in both languages.
+
+### Latency Optimization
+Begin fetching Phase 2 TTS audio speculatively during Phase 1 playback to hide network latency. By the time Phase 1 finishes (~2-3s), Phase 2 audio is likely cached and ready.
+
 ## ElevenLabs Integration
 
 ### API
 - Endpoint: `POST /v1/text-to-speech/{voice_id}`
 - Returns MP3 audio bytes
-- Timeout: 5 seconds
+- Timeout: 3 seconds (mid-call, latency matters)
 
 ### Voice Selection
 Auto-matched by locale:
@@ -44,15 +49,17 @@ Voice IDs stored as constants in `ElevenLabsTtsService`.
 - Key: `(scamType, locale)` → cached MP3 in app's temp directory (`elevenlabs_cache/`)
 - Max 82 files (41 scam types × 2 languages)
 - Persists across sessions, cleared on app update
+- **Validation**: On cache read, verify MP3 header bytes (0xFF 0xFB or ID3 tag) and minimum file size (1KB) to guard against corrupted partial writes
 
 ### API Key Storage
 - `.env` file (gitignored), loaded via `flutter_dotenv`
 - Key name: `ELEVENLABS_API_KEY`
 - Never hardcoded in source
+- **Security note**: The `.env` file is bundled into the APK and can be extracted. This is acceptable for this app's threat model (personal-use app, not distributed on Play Store). If the app is ever published, migrate to a backend proxy or Firebase Remote Config to keep the key server-side.
 
 ### Fallback Chain
 ```
-ElevenLabs API → Cached audio → Android native TTS
+Cache → ElevenLabs API → Android native TTS
 ```
 
 ## Native Audio Playback (Android)
@@ -71,6 +78,8 @@ ElevenLabs API → Cached audio → Android native TTS
 - Routes through earpiece (caller can't hear)
 - Audio focus: `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK` — ducks call audio briefly
 - Sends `warning_audio_done` event to Dart on completion
+- **OEM risk**: Earpiece routing via `USAGE_VOICE_COMMUNICATION` during active calls is not guaranteed on all Android OEMs (telephony stack owns the audio stream). If `MediaPlayer` fails to route correctly, fall back to `AudioTrack` with `MODE_STREAM` on `STREAM_VOICE_CALL`. Test on Samsung, Xiaomi, and Pixel at minimum.
+- **Skip policy**: `isSkippable` enforcement stays in Dart — Dart simply doesn't call `stopWarningAudio` during Phase 1, rather than splitting policy across layers.
 
 ## Dart Architecture
 
@@ -115,6 +124,15 @@ ElevenLabs API → Cached audio → Android native TTS
 | `scam_audio.tap_dismiss` | Chạm để tắt | Tap to dismiss |
 | `scam_audio.setting_title` | Cảnh báo bằng giọng nói | Voice scam warning |
 | `scam_audio.setting_desc` | Phát cảnh báo bằng giọng nói khi phát hiện cuộc gọi lừa đảo | Play voice warnings when scam calls are detected |
+
+## Telemetry
+
+Log the following via `debugPrint` (upgrade to analytics if app is published):
+- ElevenLabs API latency per call
+- Cache hit/miss ratio
+- Fallback to native TTS frequency
+- Warning trigger count per session
+- Phase 2 dismiss rate (user tapped to skip)
 
 ## Audio Routing
 
