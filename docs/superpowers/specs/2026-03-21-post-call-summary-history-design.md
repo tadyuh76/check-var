@@ -115,7 +115,7 @@ Tapping the notification opens `HistoryDetailScreen` for the saved entry:
 
 1. Notification payload contains the `HistoryEntry.id` (millisecondsSinceEpoch as string).
 2. `NotificationService.init()` registers an `onDidReceiveNotificationResponse` handler.
-3. On tap, parse the payload ID, retrieve the entry from `HistoryService`, push `HistoryDetailScreen`.
+3. On tap, parse the payload ID, retrieve the entry via a new `HistoryService.getById(int id)` method (currently only `getAll()` exists), push `HistoryDetailScreen`.
 4. Requires a `GlobalKey<NavigatorState>` or equivalent navigation mechanism accessible from `NotificationService`.
 
 #### When It Fires
@@ -162,11 +162,16 @@ Extend the native `call_state` event to include phone number:
 
 #### Android Side
 
-The native phone state listener already has access to the incoming number. Forward it through the existing platform channel event.
+On Android 12+ (API 31+), `TelephonyCallback.onCallStateChanged()` no longer provides the phone number. Two viable approaches:
+
+- **Option A (recommended):** Use the existing accessibility service's UI-scraping capability (e.g., `readDialerCallerInfo()`) to extract caller info from the dialer screen. This avoids additional permissions and works on modern Android.
+- **Option B:** Add `READ_CALL_LOG` permission and register a `BroadcastReceiver` for `android.intent.action.PHONE_STATE`, which provides the number via the `EXTRA_INCOMING_NUMBER` extra. This requires an additional runtime permission request.
+
+Use Option A if the accessibility service already extracts caller info. Fall back to Option B if not. Either way, `phoneNumber` remains nullable — if extraction fails, it's simply omitted.
 
 #### Permission
 
-`READ_PHONE_STATE` should already be declared for call state detection. No additional permissions expected for incoming call numbers. If the number is unavailable, the field is simply omitted.
+`READ_PHONE_STATE` is already declared. Option A requires no additional permissions. Option B requires adding `READ_CALL_LOG` to the manifest and requesting it at runtime.
 
 ## Files to Modify
 
@@ -177,6 +182,7 @@ The native phone state listener already has access to the incoming number. Forwa
 | `lib/features/scam_call/scam_call_session_manager.dart` | Add finalization logic in stopSession() |
 | `lib/app_shell.dart` | Record call timing, pass to session manager, handle unanalyzed saves |
 | `lib/services/notification_service.dart` | Add scam call notification method + tap handler |
+| `lib/services/history_service.dart` | Add `getById(int id)` retrieval method for notification tap navigation |
 | `lib/screens/history_screen.dart` | Add unanalyzed call card style |
 | `lib/screens/history_detail_screen.dart` | Add caller number, scamProbability, summary/advice, unanalyzed view |
 | `android/.../MainActivity.kt` (or equivalent) | Forward phoneNumber in call_state event |
