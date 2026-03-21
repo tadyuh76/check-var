@@ -59,10 +59,10 @@ Source: Verified against AOSP `packages/services/Telecomm/res/values-vi/strings.
 **Phone number regex:**
 
 ```regex
-^[\s]*[+]?[\d\s\-().]{6,}[\s]*$
+^[\s]*[+]?[\d\s\-().]{3,}[\s]*$
 ```
 
-Matches strings primarily composed of digits with common separators (`+`, `-`, `()`, spaces). Minimum 6 characters to avoid false matches.
+Matches strings primarily composed of digits with common separators (`+`, `-`, `()`, spaces). Minimum 3 characters to cover short-code and emergency numbers (e.g., 113, 114, 115 in Vietnam). Trade-off: slightly higher false positive risk for contacts with very short numeric names, but these are rare and fail-open is the safer default.
 
 ### Modified: `CheckVarAccessibilityService.kt`
 
@@ -83,26 +83,39 @@ fun readDialerCallerInfo(): String?
 
 2. **Heuristic fallback**: If no known package found, look for any window with type `TYPE_PHONE`.
 
-Once the dialer window is found, extract text from its node tree using the existing `extractTextFromNode()` method (reused from Live Caption extraction). Returns the extracted text or null if nothing found.
+Once the dialer window is found, extract text from its node tree using a new `extractDialerTextFromNode()` method. This is intentionally separate from the existing `extractTextFromNode()` used for Live Caption — the Live Caption variant skips `Button` and `ImageButton` nodes (to filter UI chrome), but OEM dialers sometimes render the caller name inside button-like widgets. The dialer variant does NOT skip buttons; it only skips `ImageView` nodes.
+
+**Retry strategy:** The dialer UI may not be fully rendered when `RINGING` first fires (the telephony callback arrives before the UI). `readDialerCallerInfo()` retries up to 3 times with 200ms delays before giving up and returning null. Total max delay: 600ms, well within the typical 5-15 second ring window.
+
+Returns the extracted text or null if nothing found.
 
 ### Modified: `CallMonitorService.kt`
+
+The gating happens inside `handleCallState()` itself — both the `onCallStateChanged?.invoke(event)` call AND the `startService(overlayIntent)` call are conditional on caller type. This is critical because the current code starts `OverlayBubbleService` directly in `handleCallState()`, bypassing `ServiceBridge`.
 
 ```
 handleCallState(state):
   if RINGING:
-    → ask CheckVarAccessibilityService.readDialerCallerInfo()
+    → ask CheckVarAccessibilityService.readDialerCallerInfo() (with retry)
     → pass result to CallerIdentityResolver.resolve()
     → cache result via ServiceBridge.cacheCallerType()
 
   if OFFHOOK:
     → check ServiceBridge.lastCallerType
-    → if KNOWN_CONTACT: skip (don't emit event, don't show overlay)
-    → if UNKNOWN or UNDETERMINED: proceed with current behavior
+    → if KNOWN_CONTACT:
+        - do NOT call onCallStateChanged?.invoke(event)
+        - do NOT start OverlayBubbleService
+        - do NOT set ServiceBridge.isCallActive = true
+        (complete suppression — Flutter never knows, shake won't trigger call mode)
+    → if UNKNOWN or UNDETERMINED:
+        - proceed with current behavior (emit event, show overlay)
 
   if IDLE:
     → ServiceBridge.resetCallerType()
     → proceed with current behavior (hide overlay)
 ```
+
+**Important:** When a known contact call is suppressed, `ServiceBridge.isCallActive` remains `false`. This means the shake listener's `callDetectionEnabled && isCallActive` check (in `ServiceBridge.startShakeService()`) will not match, so shaking during a known-contact call falls through to the `newsDetectionEnabled` branch or is ignored entirely. This is the desired behavior — full suppression.
 
 ### Modified: `ServiceBridge.kt`
 
@@ -116,7 +129,7 @@ fun cacheCallerType(type: CallerIdentityResolver.CallerType)
 fun resetCallerType()  // called on IDLE
 ```
 
-The `startCallMonitor()` callback is updated: when it receives an `isActive=true` event and `lastCallerType == KNOWN_CONTACT`, it does NOT emit the event to Flutter and does NOT start the overlay.
+The `startCallMonitor()` callback lambda is updated: when it receives an `isActive=true` event and `lastCallerType == KNOWN_CONTACT`, it does NOT set `isCallActive = true`, does NOT emit the event to Flutter, and does NOT start the overlay. The `isCallActive` field stays `false` for known contacts, ensuring shake detection is also suppressed for the call mode path.
 
 ### Unchanged Files
 
@@ -163,6 +176,9 @@ IDLE fires → ServiceBridge.resetCallerType()
 | Contact named with digits ("08123456") | Matches phone regex → classified as `UNKNOWN` → false positive (acceptable, degenerate case) |
 | Multiple RINGING events | Subsequent reads overwrite cache — last read wins (correct, captures most up-to-date info) |
 | User rejects call | `IDLE` fires → `resetCallerType()` → clean state for next call |
+| Dialer not rendered yet at RINGING time | `readDialerCallerInfo()` retries up to 3x with 200ms delays → if still empty, returns null → `UNDETERMINED` → fail open |
+| Shake during known-contact call | `isCallActive` stays `false` → shake handler falls through to news mode or ignores → no scam session started |
+| `TYPE_PHONE` window from non-dialer source | May extract noisy text → likely fails phone regex and private pattern → classified as `KNOWN_CONTACT` (false negative). Acceptable: fail-safe for edge case, known packages tried first |
 
 ## Testing Strategy
 
