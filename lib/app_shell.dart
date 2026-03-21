@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'controllers/news_check_controller.dart';
 import 'core/platform_channel.dart' as core_channel;
-import 'features/scam_call/scam_call_screen.dart';
 import 'features/scam_call/scam_call_session_manager.dart';
 import 'providers/home_state_provider.dart';
 import 'services/platform_channel.dart';
@@ -63,9 +62,9 @@ class _AppShellState extends State<AppShell> {
         } else {
           _onCallEnded();
         }
-      case 'overlay_tap':
-        debugPrint('AppShell: overlay_tap received');
-        _handleOverlayTap();
+      case 'overlay_activate':
+        debugPrint('AppShell: overlay_activate received');
+        _handleOverlayActivate();
       default:
         break; // shake, caption_text, tts_done handled elsewhere
     }
@@ -127,19 +126,37 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _handleCallShake() async {
-    final homeState = context.read<HomeStateProvider>();
     debugPrint(
       'AppShell._handleCallShake: '
-      'scamCallEnabled=${homeState.scamCallEnabled}, '
+      'scamCallEnabled=${context.read<HomeStateProvider>().scamCallEnabled}, '
       'hasActiveSession=${_sessionManager.hasActiveSession}',
     );
-    if (!homeState.scamCallEnabled) return;
-    if (_sessionManager.hasActiveSession) return; // already running
-
     HapticFeedback.heavyImpact();
+    await _tryStartScamSession();
+  }
+
+  Future<void> _handleOverlayActivate() async {
+    debugPrint(
+      'AppShell._handleOverlayActivate: '
+      'scamCallEnabled=${context.read<HomeStateProvider>().scamCallEnabled}, '
+      'hasActiveSession=${_sessionManager.hasActiveSession}',
+    );
+    await _tryStartScamSession();
+    // No haptic — tap already provides tactile feedback via the OS.
+  }
+
+  /// Shared guard: checks preconditions and starts a live-call session.
+  Future<void> _tryStartScamSession() async {
+    final homeState = context.read<HomeStateProvider>();
+    if (!homeState.scamCallEnabled) return;
+    if (_sessionManager.hasActiveSession) return;
+
     debugPrint('AppShell: starting background scam call session');
     await _sessionManager.startLiveCallSession();
-    debugPrint('AppShell: session started, isListening=${_sessionManager.controller?.isListening}');
+    debugPrint(
+      'AppShell: session started, '
+      'isListening=${_sessionManager.controller?.isListening}',
+    );
   }
 
   Future<void> _onCallStarted() async {
@@ -170,23 +187,6 @@ class _AppShellState extends State<AppShell> {
         await core_channel.PlatformChannel.hideOverlayBubble();
       } catch (_) {}
     }
-  }
-
-  void _handleOverlayTap() {
-    final controller = _sessionManager.detachController();
-    if (controller == null) return;
-    if (!mounted) return;
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ScamCallScreen(
-          controller: controller,
-          modeLabel: 'Live Caption',
-          disposeController: true,
-          manageSessionLifecycle: true,
-        ),
-      ),
-    );
   }
 
   @override
