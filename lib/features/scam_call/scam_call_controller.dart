@@ -153,8 +153,10 @@ class ScamCallController extends ChangeNotifier {
     _analysisInFlight = false;
     _sessionStatus = ScamCallSessionStatus.idle;
     await onOverlayHide?.call();
-    await _publishOverlayStatus();
-    notifyListeners();
+    if (!_disposed) {
+      await _publishOverlayStatus();
+      notifyListeners();
+    }
   }
 
   Future<void> _handleLiveEvent(LiveTranscriptEvent event) async {
@@ -185,6 +187,12 @@ class ScamCallController extends ChangeNotifier {
     if (text.isEmpty) {
       return;
     }
+    debugPrint(
+      'ScamCallController: transcript event '
+      'isFinal=${event.isFinal}, '
+      'len=${text.length}, '
+      'text="${text.length > 60 ? text.substring(0, 60) : text}"',
+    );
 
     if (event.isFinal) {
       // Final transcript — commit it and clear the pending partial.
@@ -235,11 +243,25 @@ class ScamCallController extends ChangeNotifier {
     try {
       // Include both committed finals and the current partial in the window.
       final transcriptWindow = _buildAnalysisText();
+      debugPrint(
+        'ScamCallController: running analysis, '
+        'transcript=${_transcript.length} lines, '
+        'window=${transcriptWindow.length} chars',
+      );
       final result = await _classifier.classifyTranscriptWindow(
         transcriptWindow,
       );
       _lastAnalysisAt = DateTime.now();
+      debugPrint(
+        'ScamCallController: analysis result '
+        'threat=${result.threatLevel.name}, '
+        'confidence=${result.confidence.toStringAsFixed(2)}, '
+        'patterns=${result.patterns}',
+      );
       _applyAnalysis(result);
+    } catch (e, st) {
+      debugPrint('ScamCallController: analysis FAILED: $e\n$st');
+      _errorMessage = 'Analysis error: $e';
     } finally {
       _analysisInFlight = false;
       if (_isListening) {
@@ -358,8 +380,11 @@ class ScamCallController extends ChangeNotifier {
     await onOverlayStatusUpdate?.call(_threatLevel, _sessionStatus, _confidence);
   }
 
+  bool _disposed = false;
+
   @override
   void dispose() {
+    _disposed = true;
     _analysisTimer?.cancel();
     _maxWaitTimer?.cancel();
     _sessionRefreshTimer?.cancel();

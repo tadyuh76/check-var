@@ -39,5 +39,7 @@ flutter:
           weight: 700
 
   assets:
+    - assets/models/gate_tfidf_config.json
+    - assets/models/gate_classifier_weights.json
     - assets/models/tfidf_config.json
     - assets/models/classifier_weights.json

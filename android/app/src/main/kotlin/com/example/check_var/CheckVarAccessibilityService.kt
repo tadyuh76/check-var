@@ -25,6 +25,13 @@ class CheckVarAccessibilityService : AccessibilityService() {
             "com.google.android.as",           // Google Android System Intelligence (Pixel, most OEMs)
             "com.google.android.tts",          // Fallback on some devices
         )
+
+        /** Packages that produce noisy TYPE_WINDOW_CONTENT_CHANGED events
+         *  but never contain caption text. Skipped to reduce overhead. */
+        private val IGNORED_PACKAGES = setOf(
+            "com.example.check_var",           // Our own app
+            "com.android.systemui",            // System UI (status bar, notifications)
+        )
     }
 
     private val executor: Executor = Executors.newSingleThreadExecutor()
@@ -32,6 +39,28 @@ class CheckVarAccessibilityService : AccessibilityService() {
 
     /** Last emitted caption text — used for word-level deduplication. */
     private var lastEmittedCaption: String = ""
+
+    /** Whether we have already dismissed the Live Caption overlay this session. */
+    private var overlayDismissed: Boolean = false
+
+    /** Unique packages seen since last diagnostic dump — helps discover Live Caption's package. */
+    private val recentPackages = mutableSetOf<String>()
+    private var lastDiagnosticDump = 0L
+
+    /** Unique event types seen since capture started — reveals if service is alive. */
+    private val seenEventTypes = mutableSetOf<Int>()
+    private var totalEventCount = 0
+
+    /** Pending delayed dismiss — reset on each "no … speech recognized" event. */
+    private val dismissRunnable = Runnable { dismissLiveCaptionOverlay() }
+
+    /**
+     * Matches Live Caption's wrong-language notice, e.g.
+     * "No English speech recognized", "No Japanese speech recognized", etc.
+     */
+    private val noSpeechPattern = Regex(
+        "no\\s+\\w+\\s+speech\\s+recognized", RegexOption.IGNORE_CASE
+    )
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -41,25 +70,43 @@ class CheckVarAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+
+        // ── Top-level diagnostic: is the service receiving ANY events? ──
+        val bridge = ServiceBridge.instance
+        if (bridge.captionCaptureActive) {
+            totalEventCount++
+            if (seenEventTypes.add(event.eventType)) {
+                Log.w(TAG, "DIAG-EVENT: eventType=${event.eventType} " +
+                        "pkg=${event.packageName} " +
+                        "(totalEvents=$totalEventCount, " +
+                        "uniqueTypes=${seenEventTypes.toList()})")
+            }
+        }
+
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
 
         val pkg = event.packageName?.toString() ?: ""
-        if (pkg !in LIVE_CAPTION_PACKAGES) {
-            // Log potentially relevant packages to help discover the correct one.
-            if (pkg.contains("caption", ignoreCase = true) ||
-                pkg.contains("android.as", ignoreCase = true) ||
-                pkg.contains("accessibility", ignoreCase = true)
-            ) {
-                Log.d(TAG, "Event from related pkg=$pkg (not in known Live Caption packages)")
+
+        if (!bridge.captionCaptureActive) {
+            // Not capturing — only log events from known Live Caption packages.
+            if (pkg in LIVE_CAPTION_PACKAGES) {
+                Log.d(TAG, "captionCaptureActive=false, ignoring Live Caption event from pkg=$pkg")
             }
             return
         }
 
-        val bridge = ServiceBridge.instance
-        if (!bridge.captionCaptureActive) {
-            Log.d(TAG, "captionCaptureActive=false, ignoring Live Caption event from pkg=$pkg")
-            return
+        // Skip packages that never contain caption text.
+        if (pkg in IGNORED_PACKAGES) return
+
+        // ── Diagnostic: log all unique packages seen while capturing ──
+        if (recentPackages.add(pkg)) {
+            Log.d(TAG, "DIAG: new package while capturing: $pkg")
         }
+
+        // When actively capturing, accept text from ANY package.
+        // During phone calls, Live Caption may render through the dialer,
+        // a carrier captioning service, or other system components — not
+        // necessarily com.google.android.as.
 
         val source = event.source
         if (source == null) {
@@ -74,6 +121,10 @@ class CheckVarAccessibilityService : AccessibilityService() {
             return
         }
         Log.d(TAG, "Caption text extracted: '${text.take(80)}'")
+
+        // NOTE: We intentionally leave the Live Caption overlay visible.
+        // Clicking its close/collapse button turns off captioning entirely
+        // on most devices, killing the accessibility event pipeline.
 
         // Word-level deduplication: only emit when new word(s) appear.
         if (text == lastEmittedCaption) return
@@ -131,6 +182,74 @@ class CheckVarAccessibilityService : AccessibilityService() {
 
     fun resetCaptionState() {
         lastEmittedCaption = ""
+        overlayDismissed = false
+        recentPackages.clear()
+        seenEventTypes.clear()
+        totalEventCount = 0
+        lastDiagnosticDump = 0L
+        mainHandler.removeCallbacks(dismissRunnable)
+        Log.d(TAG, "resetCaptionState: ready to capture Live Caption events")
+    }
+
+    /**
+     * Attempt to dismiss the Live Caption overlay by finding and clicking its
+     * close / collapse button.  The captioning service keeps running internally
+     * so accessibility events should continue to flow.
+     *
+     * This is best-effort: if the window or button is not found, it is a no-op.
+     */
+    fun dismissLiveCaptionOverlay() {
+        if (overlayDismissed) return
+        overlayDismissed = true
+
+        try {
+            val windows = windows ?: run {
+                Log.d(TAG, "dismissLiveCaptionOverlay: getWindows() returned null")
+                return
+            }
+
+            for (window in windows) {
+                val root = window.root ?: continue
+                val pkg = root.packageName?.toString() ?: ""
+                if (pkg !in LIVE_CAPTION_PACKAGES) {
+                    root.recycle()
+                    continue
+                }
+
+                Log.d(TAG, "dismissLiveCaptionOverlay: found Live Caption window (pkg=$pkg)")
+                val dismissed = findAndClickClose(root)
+                root.recycle()
+                if (dismissed) {
+                    Log.d(TAG, "dismissLiveCaptionOverlay: clicked close/collapse button")
+                    return
+                }
+            }
+            Log.d(TAG, "dismissLiveCaptionOverlay: no Live Caption close button found")
+        } catch (e: Exception) {
+            Log.w(TAG, "dismissLiveCaptionOverlay: failed", e)
+        }
+    }
+
+    /**
+     * Recursively search for a clickable Button / ImageButton and click it.
+     * Returns true if a click was performed.
+     */
+    private fun findAndClickClose(node: AccessibilityNodeInfo): Boolean {
+        val className = node.className?.toString() ?: ""
+        if ((className == "android.widget.ImageButton" || className == "android.widget.Button")
+            && node.isClickable
+        ) {
+            val result = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            Log.d(TAG, "findAndClickClose: clicked $className, result=$result")
+            return result
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = findAndClickClose(child)
+            child.recycle()
+            if (found) return true
+        }
+        return false
     }
 
     override fun onInterrupt() {}

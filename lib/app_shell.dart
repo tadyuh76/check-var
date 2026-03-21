@@ -58,7 +58,9 @@ class _AppShellState extends State<AppShell> {
       case 'call_state':
         final isActive = event['isActive'] as bool? ?? false;
         debugPrint('AppShell: call_state isActive=$isActive');
-        if (!isActive) {
+        if (isActive) {
+          _onCallStarted();
+        } else {
           _onCallEnded();
         }
       case 'overlay_tap':
@@ -126,12 +128,30 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _handleCallShake() async {
     final homeState = context.read<HomeStateProvider>();
+    debugPrint(
+      'AppShell._handleCallShake: '
+      'scamCallEnabled=${homeState.scamCallEnabled}, '
+      'hasActiveSession=${_sessionManager.hasActiveSession}',
+    );
     if (!homeState.scamCallEnabled) return;
     if (_sessionManager.hasActiveSession) return; // already running
 
     HapticFeedback.heavyImpact();
     debugPrint('AppShell: starting background scam call session');
     await _sessionManager.startLiveCallSession();
+    debugPrint('AppShell: session started, isListening=${_sessionManager.controller?.isListening}');
+  }
+
+  Future<void> _onCallStarted() async {
+    final homeState = context.read<HomeStateProvider>();
+    if (!homeState.scamCallEnabled) return;
+
+    debugPrint('AppShell: call started — showing overlay reminder');
+    try {
+      await core_channel.PlatformChannel.showOverlayBubble();
+    } catch (e) {
+      debugPrint('AppShell: failed to show overlay bubble: $e');
+    }
   }
 
   Future<void> _onCallEnded() async {
@@ -144,6 +164,11 @@ class _AppShellState extends State<AppShell> {
     // If the session manager still owns the controller, full cleanup.
     if (_sessionManager.hasActiveSession) {
       await _sessionManager.stopSession();
+    } else {
+      // No session was started (user never shook) — hide the reminder overlay.
+      try {
+        await core_channel.PlatformChannel.hideOverlayBubble();
+      } catch (_) {}
     }
   }
 
@@ -166,7 +191,9 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ChangeNotifierProvider<ScamCallSessionManager>.value(
+      value: _sessionManager,
+      child: Scaffold(
       body: _screens[_currentIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
@@ -190,6 +217,7 @@ class _AppShellState extends State<AppShell> {
             label: 'Cài đặt',
           ),
         ],
+      ),
       ),
     );
   }

@@ -201,12 +201,19 @@ class ServiceBridge private constructor() {
     // ── Live Caption capture methods ────────────────────────────────────────
 
     private fun startCaptionCapture() {
-        Log.d(TAG, "startCaptionCapture: setting captionCaptureActive=true, a11y=${CheckVarAccessibilityService.instance != null}")
+        val a11y = CheckVarAccessibilityService.instance
+        Log.w(TAG, "startCaptionCapture: a11yService=${a11y != null}, " +
+                "eventSink=${eventSink != null}")
+        if (a11y == null) {
+            Log.e(TAG, "startCaptionCapture: AccessibilityService NOT RUNNING — " +
+                    "user must enable it in Settings > Accessibility")
+        }
         captionCaptureActive = true
-        CheckVarAccessibilityService.instance?.resetCaptionState()
+        a11y?.resetCaptionState()
     }
 
     private fun stopCaptionCapture() {
+        Log.d(TAG, "stopCaptionCapture: setting captionCaptureActive=false")
         captionCaptureActive = false
     }
 

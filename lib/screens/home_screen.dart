@@ -4,10 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/platform_channel.dart' as core_channel;
-import '../features/scam_call/live/live_caption_transcript_gateway.dart';
 import '../features/scam_call/live/simulated_call_scenario.dart';
-import '../features/scam_call/scam_call_controller.dart' as feature;
 import '../features/scam_call/scam_call_screen.dart' as feature_screen;
+import '../features/scam_call/scam_call_session_manager.dart';
 import '../theme/app_theme.dart';
 import '../providers/home_state_provider.dart';
 import '../services/platform_channel.dart';
@@ -231,9 +230,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     if (!mounted || scenario == null) return;
 
-    final controller = feature.ScamCallController(
-      transcriptGateway: LiveCaptionTranscriptGateway(),
-    );
+    final sessionManager = context.read<ScamCallSessionManager>();
+    await sessionManager.startSimulationSession(scenario);
+    if (!mounted) return;
+
+    final controller = sessionManager.detachController();
+    if (controller == null) return;
 
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -242,14 +244,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           modeLabel: 'Simulation: ${scenario.title}',
           disposeController: true,
         ),
-      ),
-    );
-
-    // TTS speaks the script → Live Caption transcribes → pipeline analyzes.
-    unawaited(
-      core_channel.PlatformChannel.speakText(
-        scenario.spokenScript,
-        preferSpeaker: true,
       ),
     );
   }
