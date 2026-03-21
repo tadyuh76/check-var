@@ -1,17 +1,29 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/check_result.dart';
+import '../models/call_result.dart';
+
+typedef NotificationTapCallback = void Function(String? payload);
 
 class NotificationService {
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
+  static NotificationTapCallback? _onNotificationTap;
 
-  static Future<void> init() async {
+  static Future<void> init({NotificationTapCallback? onNotificationTap}) async {
     if (_initialized) return;
+    _onNotificationTap = onNotificationTap;
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: androidSettings);
-    await _plugin.initialize(settings);
+    await _plugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: _handleNotificationResponse,
+    );
     _initialized = true;
+  }
+
+  static void _handleNotificationResponse(NotificationResponse response) {
+    _onNotificationTap?.call(response.payload);
   }
 
   static Future<bool> requestPermission() async {
@@ -76,6 +88,49 @@ class NotificationService {
           priority: Priority.high,
         ),
       ),
+    );
+  }
+
+  // --- Scam call notification support ---
+
+  static String buildScamCallTitle(CallResult result) {
+    final verdictVn = switch (result.threatLevel) {
+      ThreatLevel.safe => 'An toàn',
+      ThreatLevel.suspicious => 'Đáng ngờ',
+      ThreatLevel.scam => 'Lừa đảo',
+    };
+    final confidence = (result.confidence * 100).round();
+    return 'CheckVar: $verdictVn ($confidence%)';
+  }
+
+  static String? buildScamCallBody(CallResult result) {
+    if (result.patterns.isNotEmpty) {
+      return result.patterns.first;
+    }
+    return result.summary;
+  }
+
+  static Future<void> showScamCallResult(
+    CallResult result, {
+    required int historyEntryId,
+  }) async {
+    final title = buildScamCallTitle(result);
+    final body = buildScamCallBody(result);
+
+    await _plugin.show(
+      historyEntryId,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'checkvar_scam_call',
+          'Ket qua cuoc goi',
+          channelDescription: 'Thong bao ket qua phan tich cuoc goi',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+      payload: historyEntryId.toString(),
     );
   }
 }
