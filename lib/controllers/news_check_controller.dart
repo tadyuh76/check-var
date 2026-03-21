@@ -73,7 +73,7 @@ class NewsCheckController extends ChangeNotifier {
         verdictLabel: verdictLabel,
         confidence: _confidenceLabel(result.confidence),
         summary: result.summary,
-        closeLabel: 'news_check.close'.tr(),
+        detailLabel: 'news_check.view_detail'.tr(),
       );
 
       // Save to history

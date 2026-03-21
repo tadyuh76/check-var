@@ -64,14 +64,14 @@ class PlatformChannel {
     required String verdictLabel,
     required String confidence,
     required String summary,
-    required String closeLabel,
+    required String detailLabel,
   }) async {
     await _methods.invokeMethod('showAnalysisResult', {
       'verdict': verdict,
       'verdictLabel': verdictLabel,
       'confidence': confidence,
       'summary': summary,
-      'closeLabel': closeLabel,
+      'detailLabel': detailLabel,
     });
   }
 
@@ -87,5 +87,7 @@ class PlatformChannel {
     });
   }
 
-  static Stream<dynamic> get eventStream => _events.receiveBroadcastStream();
+  static Stream<dynamic>? _cachedEventStream;
+  static Stream<dynamic> get eventStream =>
+      _cachedEventStream ??= _events.receiveBroadcastStream();
 }

@@ -63,6 +63,10 @@ class ServiceBridge private constructor() {
         eventSink = null
     }
 
+    fun sendEvent(data: Map<String, Any>) {
+        mainHandler.post { eventSink?.success(data) }
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     //  NEWS-CHECK: Accessibility OCR shake handler (remote's feature)
     // ═══════════════════════════════════════════════════════════════════════

@@ -7,8 +7,10 @@ import 'controllers/news_check_controller.dart';
 import 'providers/home_state_provider.dart';
 import 'services/platform_channel.dart';
 import 'services/shake_service.dart';
+import 'models/history_entry.dart';
 import 'screens/home_screen.dart';
 import 'screens/history_screen.dart';
+import 'screens/history_detail_screen.dart';
 import 'screens/settings_screen.dart';
 
 class AppShell extends StatefulWidget {
@@ -21,6 +23,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _currentIndex = 1; // Default to Home (middle tab)
   StreamSubscription<String>? _shakeSub;
+  StreamSubscription<dynamic>? _eventSub;
   bool _isProcessing = false;
 
   final _screens = const [
@@ -34,11 +37,26 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     ShakeService.instance.startListening();
     _shakeSub = ShakeService.instance.onShake.listen(_handleShake);
+    _eventSub = PlatformChannel.eventStream.listen(_handlePlatformEvent);
+  }
+
+  void _handlePlatformEvent(dynamic event) {
+    if (event is Map && event['type'] == 'open_detail') {
+      final controller = NewsCheckController.instance;
+      final result = controller.result;
+      if (result != null) {
+        final entry = HistoryEntry.fromCheckResult(result);
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => HistoryDetailScreen(entry: entry)),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
     _shakeSub?.cancel();
+    _eventSub?.cancel();
     super.dispose();
   }
 

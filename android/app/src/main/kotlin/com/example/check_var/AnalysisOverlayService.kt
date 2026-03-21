@@ -16,6 +16,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.view.MotionEvent
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
@@ -44,8 +45,8 @@ class AnalysisOverlayService : Service() {
             mainHandler.post { instance?.setStatus(statusText) }
         }
 
-        fun showResult(verdict: String, verdictLabel: String, confidence: String, summary: String, closeLabel: String) {
-            mainHandler.post { instance?.setResult(verdict, verdictLabel, confidence, summary, closeLabel) }
+        fun showResult(verdict: String, verdictLabel: String, confidence: String, summary: String, detailLabel: String) {
+            mainHandler.post { instance?.setResult(verdict, verdictLabel, confidence, summary, detailLabel) }
         }
 
         fun showError(message: String, errorLabel: String = "Error", closeLabel: String = "Close") {
@@ -68,11 +69,20 @@ class AnalysisOverlayService : Service() {
     private var autoDismissRunnable: Runnable? = null
     private var safetyTimeoutRunnable: Runnable? = null
     private var isDismissing = false
+    private var screenReceiver: android.content.BroadcastReceiver? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
+
+        // Don't show overlay on lock screen
+        val km = getSystemService(KEYGUARD_SERVICE) as android.app.KeyguardManager
+        if (km.isKeyguardLocked) {
+            stopSelf()
+            return
+        }
+
         instance = this
         val a11y = CheckVarAccessibilityService.instance
         windowManager = if (a11y != null) {
@@ -84,6 +94,14 @@ class AnalysisOverlayService : Service() {
 
         safetyTimeoutRunnable = Runnable { stopSelf() }
         mainHandler.postDelayed(safetyTimeoutRunnable!!, 60_000)
+
+        // Dismiss when screen locks
+        screenReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == Intent.ACTION_SCREEN_OFF) stopSelf()
+            }
+        }
+        registerReceiver(screenReceiver, android.content.IntentFilter(Intent.ACTION_SCREEN_OFF))
     }
 
     private fun dp(value: Int): Int =
@@ -248,11 +266,10 @@ class AnalysisOverlayService : Service() {
 
     // ── Result / Error ────────────────────────────────────────────────────
 
-    private fun setResult(verdict: String, vLabel: String, confidence: String, summary: String, closeLabel: String) {
+    private fun setResult(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String) {
         safetyTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         dotAnimator?.cancel()
 
-        // Slide loading card down, then show result
         loadingOverlay?.animate()
             ?.translationY(dp(400).toFloat())
             ?.alpha(0f)
@@ -265,7 +282,7 @@ class AnalysisOverlayService : Service() {
             ?.start()
 
         mainHandler.postDelayed({
-            showResultCard(verdict, vLabel, confidence, summary, closeLabel)
+            showResultCard(verdict, vLabel, confidence, summary, detailLabel)
         }, 200)
 
         autoDismissRunnable = Runnable { dismissWithAnimation() }
@@ -297,8 +314,8 @@ class AnalysisOverlayService : Service() {
 
     // ── Result card ──────────────────────────────────────────────────────
 
-    private fun showResultCard(verdict: String, vLabel: String, confidence: String, summary: String, closeLabel: String) {
-        // Scrim
+    private fun showResultCard(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String) {
+        // Scrim — tap to dismiss
         scrimView = View(this).apply {
             setBackgroundColor(Color.parseColor("#55000000"))
             alpha = 0f
@@ -337,24 +354,83 @@ class AnalysisOverlayService : Service() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(24), dp(14), dp(24), dp(24))
+            setPadding(dp(24), dp(10), dp(24), dp(24))
         }
         wrapper.addView(card, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
-        // Handle
-        card.addView(View(this).apply {
+        // ── Top bar: handle (draggable) + X button ──
+        val topBar = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(12) }
+        }
+
+        // Handle bar (centered)
+        val handle = View(this).apply {
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#DDDDDD"))
                 cornerRadius = dp(3).toFloat()
             }
-            layoutParams = LinearLayout.LayoutParams(dp(36), dp(5)).apply {
+            layoutParams = FrameLayout.LayoutParams(dp(36), dp(5)).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(20)
+                topMargin = dp(8)
             }
-        })
+        }
+        topBar.addView(handle)
+
+        // X close button (top-right)
+        val closeBtn = TextView(this).apply {
+            text = "✕"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            setTextColor(Color.parseColor("#999999"))
+            gravity = Gravity.CENTER
+            val s = dp(32)
+            layoutParams = FrameLayout.LayoutParams(s, s).apply {
+                gravity = Gravity.END or Gravity.TOP
+            }
+            setOnClickListener { dismissWithAnimation() }
+        }
+        topBar.addView(closeBtn)
+
+        // Drag-to-dismiss on handle only (not topBar, so X button stays tappable)
+        var startY = 0f
+        var startTransY = 0f
+        val dismissThreshold = (screenHeight() * 0.1f)
+        handle.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startY = event.rawY
+                    startTransY = root.translationY
+                    autoDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = event.rawY - startY
+                    if (dy > 0) root.translationY = startTransY + dy
+                    val progress = (root.translationY / dismissThreshold).coerceIn(0f, 1f)
+                    scrimView?.alpha = 1f - progress
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (root.translationY > dismissThreshold) {
+                        dismissWithAnimation()
+                    } else {
+                        root.animate().translationY(0f).setDuration(200).start()
+                        scrimView?.animate()?.alpha(1f)?.setDuration(200)?.start()
+                        // Restore auto-dismiss
+                        autoDismissRunnable = Runnable { dismissWithAnimation() }
+                        mainHandler.postDelayed(autoDismissRunnable!!, 15_000)
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+        card.addView(topBar)
 
         // Verdict emoji
         val icon = TextView(this).apply {
@@ -443,24 +519,35 @@ class AnalysisOverlayService : Service() {
         })
         card.addView(scrollView)
 
-        // Close button
-        card.addView(TextView(this).apply {
-            text = closeLabel
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#2196F3"))
-                cornerRadius = dp(14).toFloat()
-            }
-            setPadding(dp(24), dp(14), dp(24), dp(14))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(16) }
-            setOnClickListener { dismissWithAnimation() }
-        })
+        // "View details" button — opens app
+        if (verdict != "error") {
+            card.addView(TextView(this).apply {
+                text = detailLabel
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#2196F3"))
+                    cornerRadius = dp(14).toFloat()
+                }
+                setPadding(dp(24), dp(14), dp(24), dp(14))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(16) }
+                setOnClickListener {
+                    // Send event to Flutter to open detail screen
+                    ServiceBridge.instance.sendEvent(mapOf("type" to "open_detail"))
+                    // Open the app
+                    packageManager.getLaunchIntentForPackage(packageName)?.let { i ->
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        startActivity(i)
+                    }
+                    dismissWithAnimation()
+                }
+            })
+        }
 
         // Window: 65% height
         windowManager?.addView(root, WindowManager.LayoutParams(
@@ -504,6 +591,7 @@ class AnalysisOverlayService : Service() {
     override fun onDestroy() {
         instance = null
         dotAnimator?.cancel()
+        screenReceiver?.let { try { unregisterReceiver(it) } catch (_: Exception) {} }
         safetyTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         autoDismissRunnable?.let { mainHandler.removeCallbacks(it) }
         loadingOverlay?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }

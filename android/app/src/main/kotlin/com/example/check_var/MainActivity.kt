@@ -119,8 +119,8 @@ class MainActivity : FlutterActivity() {
                         val verdictLabel = call.argument<String>("verdictLabel") ?: ""
                         val confidence = call.argument<String>("confidence") ?: ""
                         val summary = call.argument<String>("summary") ?: ""
-                        val closeLabel = call.argument<String>("closeLabel") ?: "Close"
-                        AnalysisOverlayService.showResult(verdict, verdictLabel, confidence, summary, closeLabel)
+                        val detailLabel = call.argument<String>("detailLabel") ?: "View details"
+                        AnalysisOverlayService.showResult(verdict, verdictLabel, confidence, summary, detailLabel)
                         result.success(null)
                     }
                     "showAnalysisError" -> {

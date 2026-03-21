@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/history_entry.dart';
 
@@ -8,6 +9,9 @@ class HistoryService {
   HistoryService._();
 
   Box<HistoryEntry>? _box;
+
+  /// Listenable that fires when history changes
+  ValueListenable<Box<HistoryEntry>>? get listenable => _box?.listenable();
 
   Future<void> init() async {
     if (!Hive.isAdapterRegistered(0)) {

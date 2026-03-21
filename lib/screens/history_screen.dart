@@ -25,10 +25,12 @@ class _HistoryScreenState extends State<HistoryScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadEntries();
+    HistoryService.instance.listenable?.addListener(_loadEntries);
   }
 
   @override
   void dispose() {
+    HistoryService.instance.listenable?.removeListener(_loadEntries);
     _tabController.dispose();
     super.dispose();
   }

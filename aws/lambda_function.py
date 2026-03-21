@@ -15,8 +15,16 @@ def lambda_handler(event, context):
         if not text or len(text) < 20:
             return _response(400, {"error": "Text too short"})
 
-        # Step 1: Extract search query via OpenAI
+        # Step 1: Extract search query + detect non-news
         query = _extract_search_query(text)
+
+        if query is None:
+            return _response(200, {
+                "verdict": "not_news",
+                "confidence": 1.0,
+                "summary": "Nội dung này không phải tin tức có thể kiểm chứng.",
+                "sources": [],
+            })
 
         # Step 2: Web search via Serper
         sources = _web_search(query)
@@ -35,14 +43,8 @@ def lambda_handler(event, context):
 # ---------------------------------------------------------------------------
 
 def _extract_search_query(text):
+    """Extract search query + detect non-news content in a single API call."""
     truncated = text[:1000]
-
-    prompt = (
-        "From the following text, extract the single most important factual "
-        "claim and turn it into a concise Google search query (Vietnamese or "
-        "English, matching the text language). Return ONLY the search query, "
-        "nothing else.\n\nTEXT:\n" + truncated
-    )
 
     try:
         content = _openai_chat(
@@ -50,19 +52,26 @@ def _extract_search_query(text):
                 {
                     "role": "system",
                     "content": (
-                        "You extract search queries from text. "
-                        "Return ONLY the query string, no quotes, no explanation."
+                        "You analyze text and return JSON. No explanation.\n"
+                        'If the text contains a factual news claim that can be verified:\n'
+                        '  {"type":"news","query":"<concise Google search query>"}\n'
+                        'If the text is NOT verifiable news (personal questions, opinions, '
+                        'ads, memes, jokes, conversations, product listings, app UI):\n'
+                        '  {"type":"not_news","query":""}'
                     ),
                 },
-                {"role": "user", "content": prompt},
+                {"role": "user", "content": truncated},
             ],
             temperature=0.0,
             max_tokens=100,
+            json_mode=True,
         )
 
-        query = content.strip().strip("\"'")
-        if query:
-            return query
+        parsed = _extract_json(content)
+        if parsed and parsed.get("type") == "not_news":
+            return None  # Signal: skip fact-checking
+        if parsed and parsed.get("query"):
+            return parsed["query"].strip().strip("\"'")
     except Exception:
         pass
 
@@ -134,13 +143,20 @@ Rules:
 - Rumors/opinions/non-news/ads/memes -> "uncertain"
 - NEVER say "beyond knowledge cutoff" — use the sources instead
 
+Confidence levels (pick ONE based on source quality):
+- "very_high": 3+ reliable sources clearly confirm/deny
+- "high": 1-2 reliable sources support the verdict
+- "medium": sources are relevant but not conclusive
+- "low": few relevant sources, mostly indirect
+- "very_low": no relevant sources found, pure guess
+
 CLAIM:
 {truncated}
 
 TODAY'S WEB SEARCH RESULTS:
 {source_summary}
 
-{{"verdict":"real|fake|uncertain","confidence":0.0-1.0,"summary":"1-2 sentence Vietnamese explanation based on sources"}}"""
+{{"verdict":"real|fake|uncertain","confidence":"very_high|high|medium|low|very_low","summary":"1-2 sentence Vietnamese explanation based on sources"}}"""
 
     try:
         content = _openai_chat(
@@ -165,7 +181,15 @@ TODAY'S WEB SEARCH RESULTS:
         if verdict not in ("real", "fake", "uncertain"):
             verdict = "uncertain"
 
-        confidence = min(max(float(parsed.get("confidence", 0)), 0.0), 1.0)
+        confidence_map = {
+            "very_high": 0.95,
+            "high": 0.75,
+            "medium": 0.50,
+            "low": 0.30,
+            "very_low": 0.10,
+        }
+        raw_conf = str(parsed.get("confidence", "very_low")).lower().strip()
+        confidence = confidence_map.get(raw_conf, 0.50)
         summary = parsed.get("summary", "")
 
         if not sources:

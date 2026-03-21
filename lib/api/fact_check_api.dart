@@ -10,17 +10,32 @@ import '../models/check_result.dart';
 /// Regex matching OCR junk: timestamps, status-bar noise, app names,
 /// UI chrome, ads, metadata, and CheckVar's own UI strings.
 final RegExp _ocrJunk = RegExp(
+  // Timestamps, battery
   r'^\d{1,2}:\d{2}(\s*(AM|PM|am|pm))?$|'
   r'^O{3,}$|'
   r'^\d+\s*%$|'
   r'^[A-Z\s]*\d+\s*%$|'
   r'^I\s*D\s*\d+%$|'
-  r'^(Facebook|Messenger|Chrome|Safari|Zalo|Google Lens|TikTok)$|'
-  r'^(CHIA SẺ|Nghe đọc bài|Mua ngay|Mở rộng|Hot|Mới)$|'
+  // App names
+  r'^(Facebook|Messenger|Chrome|Safari|Zalo|Google Lens|TikTok|Instagram|Twitter|Threads)$|'
+  // Vietnamese UI buttons
+  r'^(CHIA SẺ|Nghe đọc bài|Mua ngay|Mở rộng|Hot|Mới|Xem thêm|Theo dõi|Trả lời)$|'
   r'^tài trợ$|'
+  // Prices
   r'^\d{1,3}(\.\d{3})*(đ|₫)$|'
+  // Site names
   r'^(TRANG THÔNG TIN|reviewer\.|m\.genk\.vn)$|'
-  r'^(CheckVar|Analysis failed|Đang phân tích)$',
+  // CheckVar UI
+  r'^(CheckVar|Analysis failed|Đang phân tích)$|'
+  // Social media chrome
+  r'^(Like|Comment|Share|Follow|Remove|Add friend|See all|Xem tất cả).*$|'
+  r'^\d+[\s.]*(K|M)?\s*(😮|😂|👍|💬|🔥|❤️|comments?|likes?|shares?|reactions?).*$|'
+  // YouTube/source labels
+  r'^YouTube\s*·.*$|'
+  // Emoji-only lines (no letters or digits)
+  r'^[^a-zA-ZÀ-ỹ0-9]+$|'
+  // URLs
+  r'^(https?://|@\s*\w+\.\w+).*$',
   caseSensitive: false,
 );
 
