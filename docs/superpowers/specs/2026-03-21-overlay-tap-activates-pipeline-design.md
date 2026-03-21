@@ -82,6 +82,17 @@ Follows the same pattern as `emitCaptionText()` (line 262) — post to main hand
 - `flushPendingAppAction()` (line 380-384)
 - `pendingAppAction` field (line 35)
 
+### 2b. `MainActivity.kt` — Dead code cleanup
+
+**File:** `android/app/src/main/kotlin/com/example/check_var/MainActivity.kt`
+
+With `launchApp()` removed, nothing sets `EXTRA_APP_ACTION` / `ACTION_OPEN_CALL_DEBUG` anymore. Remove:
+- `EXTRA_APP_ACTION` constant (line 23)
+- `ACTION_OPEN_CALL_DEBUG` constant (line 24)
+- `handleAppActionIntent()` method (lines 164-168)
+- Call sites referencing `handleAppActionIntent` (lines 116, 161)
+- Update the event channel comment (line 19) to replace `overlay_tap` with `overlay_activate`
+
 ### 3. `AppShell` — Handle new event, remove old navigation
 
 **File:** `lib/app_shell.dart`
@@ -96,6 +107,15 @@ case 'overlay_activate':
 **New method `_handleOverlayActivate()`:** Same logic as `_handleCallShake()` (lines 129-143) — check `scamCallEnabled`, check no active session, then `_sessionManager.startLiveCallSession()`. No haptic feedback (tap already provides tactile response via the OS). Consider extracting the shared guard logic (`scamCallEnabled` + `hasActiveSession` checks) into a private helper shared with `_handleCallShake()` to avoid duplication.
 
 **Remove `_handleOverlayTap()`** (lines 175-190) and its `case 'overlay_tap'` in the switch (line 69).
+
+### 3b. `ShakeService` — Dead code cleanup
+
+**File:** `lib/core/shake_service.dart`
+
+Remove dead `overlay_tap` handling:
+- `OverlayTapCallback` typedef (line 6)
+- `onOverlayTap` field (line 12)
+- `else if (type == 'overlay_tap')` branch (lines 23-24)
 
 ### 4. No changes needed
 
