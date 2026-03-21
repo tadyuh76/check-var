@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/api/gemini_scam_text_api.dart';
 import '../../core/api/local_scam_classifier.dart';
 import '../../core/platform_channel.dart';
+import '../../models/call_result.dart' as call_result;
 import '../../models/scam_alert.dart';
 import 'live/scam_call_transcript_gateway.dart';
 import 'live/live_caption_transcript_gateway.dart';
@@ -77,6 +78,18 @@ class ScamCallController extends ChangeNotifier {
   String _summary = '';
   String _advice = '';
   double _confidence = 0;
+
+  // ── EMA smoothing state ──────────────────────────────────────────
+  static const _emaAlpha = 0.35;
+
+  /// Exponential moving average of raw scam probability.  Initialized to
+  /// -1 (sentinel) so the first analysis seeds the value directly.
+  double _emaScamProb = -1.0;
+
+  /// Consecutive analyses where the classifier returned non-safe.
+  /// Decrements by 1 on safe (instead of resetting) to avoid flicker.
+  int _consecutiveNonSafe = 0;
+
   bool _isListening = false;
   bool _analysisInFlight = false;
   String? _errorMessage;
@@ -107,6 +120,37 @@ class ScamCallController extends ChangeNotifier {
     ScamCallSessionStatus.analyzing => 'Đang phân tích',
     ScamCallSessionStatus.error => 'Lỗi',
   };
+
+  /// The raw EMA-smoothed scam probability. Returns null if no analysis has run.
+  double? get emaScamProbability => _emaScamProb < 0 ? null : _emaScamProb;
+
+  /// Extracts the controller's current analysis state as a [call_result.CallResult].
+  /// Call this before disposing the controller to capture the final state.
+  call_result.CallResult extractCallResult({
+    required DateTime callStartTime,
+    required DateTime callEndTime,
+    String? callerNumber,
+  }) {
+    // Both ThreatLevel enums (scam_alert.dart and call_result.dart) have
+    // identical value names, so we convert via name lookup.
+    final threat = call_result.ThreatLevel.values.firstWhere(
+      (v) => v.name == _threatLevel.name,
+    );
+    return call_result.CallResult(
+      threatLevel: threat,
+      confidence: _confidence,
+      transcript: _transcript.map((l) => l.text).join(' '),
+      patterns: List.unmodifiable(_patterns),
+      duration: callEndTime.difference(callStartTime),
+      callerNumber: callerNumber,
+      callStartTime: callStartTime,
+      callEndTime: callEndTime,
+      wasAnalyzed: true,
+      summary: _summary.isNotEmpty ? _summary : null,
+      advice: _advice.isNotEmpty ? _advice : null,
+      scamProbability: _emaScamProb < 0 ? null : _emaScamProb,
+    );
+  }
 
   Future<void> startListening() async {
     if (_isListening) {
@@ -273,15 +317,47 @@ class ScamCallController extends ChangeNotifier {
   }
 
   void _applyAnalysis(ScamAnalysisResult result) {
-    if (result.threatLevel.index >= _threatLevel.index) {
-      _threatLevel = result.threatLevel;
-      _confidence = result.confidence;
+    // ── Update EMA ───────────────────────────────────────────────────
+    final prob = result.scamProbability;
+    if (_emaScamProb < 0) {
+      _emaScamProb = prob; // first analysis — seed directly
+    } else {
+      _emaScamProb = _emaAlpha * prob + (1 - _emaAlpha) * _emaScamProb;
+    }
+
+    // ── Update consecutive non-safe counter ──────────────────────────
+    if (result.threatLevel == ThreatLevel.safe) {
+      _consecutiveNonSafe = (_consecutiveNonSafe - 1).clamp(0, 999);
+    } else {
+      _consecutiveNonSafe++;
+    }
+
+    // ── Determine effective threat level from EMA + consecutive gate ─
+    final ThreatLevel effectiveThreat;
+    if (_emaScamProb < 0.50) {
+      effectiveThreat = ThreatLevel.safe;
+    } else if (_consecutiveNonSafe < 2) {
+      effectiveThreat = ThreatLevel.safe; // still gathering signal
+    } else if (_emaScamProb < 0.55) {
+      effectiveThreat = ThreatLevel.suspicious;
+    } else {
+      effectiveThreat = ThreatLevel.scam;
+    }
+
+    _threatLevel = effectiveThreat;
+    _confidence = _emaScamProb;
+
+    // ── Update summary / advice / patterns ───────────────────────────
+    if (effectiveThreat != ThreatLevel.safe) {
       if (result.summary.trim().isNotEmpty) {
         _summary = result.summary;
       }
       if (result.advice.trim().isNotEmpty) {
         _advice = result.advice;
       }
+    } else {
+      _summary = '';
+      _advice = '';
     }
 
     _patterns = {
@@ -369,6 +445,8 @@ class ScamCallController extends ChangeNotifier {
     _summary = '';
     _advice = '';
     _confidence = 0;
+    _emaScamProb = -1.0;
+    _consecutiveNonSafe = 0;
     _errorMessage = null;
     _sessionWarning = null;
     _analysisInFlight = false;
