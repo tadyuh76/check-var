@@ -68,10 +68,15 @@ class NewsCheckController extends ChangeNotifier {
         Verdict.fake => 'verdict.fake'.tr(),
         Verdict.uncertain => 'verdict.uncertain_full'.tr(),
       };
+      // When uncertain, don't show confidence (it's confusing)
+      final confidenceStr = result.verdict == Verdict.uncertain
+          ? ''
+          : _confidenceLabel(result.confidence);
+
       await PlatformChannel.showAnalysisResult(
         verdict: result.verdict.name,
         verdictLabel: verdictLabel,
-        confidence: _confidenceLabel(result.confidence),
+        confidence: confidenceStr,
         summary: result.summary,
         detailLabel: 'news_check.view_detail'.tr(),
       );

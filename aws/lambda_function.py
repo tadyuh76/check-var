@@ -35,7 +35,9 @@ def lambda_handler(event, context):
         return _response(200, result)
 
     except Exception as e:
-        return _response(500, {"error": str(e)})
+        import traceback
+        traceback.print_exc()  # Log to CloudWatch
+        return _response(500, {"error": "Internal server error"})
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +70,7 @@ def _extract_search_query(text):
                 {"role": "user", "content": truncated},
             ],
             temperature=0.0,
-            max_tokens=100,
+            max_tokens=200,
             json_mode=True,
         )
 
@@ -78,8 +80,10 @@ def _extract_search_query(text):
         queries = parsed.get("queries", []) if parsed else []
         if queries and isinstance(queries, list):
             return [q.strip().strip("\"'") for q in queries if q.strip()]
-    except Exception:
+    except (json.JSONDecodeError, KeyError, TypeError):
         pass
+    except urllib.error.URLError:
+        raise  # Let network errors propagate to top-level handler
 
     # Fallback: longest line > 20 chars
     lines = [l for l in text.split("\n") if len(l.strip()) > 20]
@@ -93,15 +97,92 @@ def _extract_search_query(text):
 # 2. Web search via Serper.dev
 # ---------------------------------------------------------------------------
 
+
+# Trusted news domains — tiered by reliability
+# Tier 1: Government, wire services, major national outlets
+# Tier 2: Major newspapers, TV networks
+# Tier 3: Known reputable outlets
+TRUSTED_DOMAINS = {
+    # ── Vietnam: Tier 1 (state media, wire services) ──
+    "nhandan.vn": 1, "dangcongsan.vn": 1, "chinhphu.vn": 1,
+    "baochinhphu.vn": 1, "quochoi.vn": 1, "vtv.vn": 1,
+    "vov.vn": 1, "ttxvn.vn": 1, "vietnamplus.vn": 1,
+    "qdnd.vn": 1, "cand.com.vn": 1, "bvn.com.vn": 1,
+
+    # ── Vietnam: Tier 2 (major outlets) ──
+    "vnexpress.net": 2, "tuoitre.vn": 2, "thanhnien.vn": 2,
+    "dantri.com.vn": 2, "laodong.vn": 2, "tienphong.vn": 2,
+    "vietnamnet.vn": 2, "nld.com.vn": 2, "sggp.org.vn": 2,
+    "zingnews.vn": 2, "vnanet.vn": 2, "baomoi.com": 2,
+
+    # ── Vietnam: Tier 3 (reputable) ──
+    "vneconomy.vn": 3, "cafef.vn": 3, "genk.vn": 3,
+    "kenh14.vn": 3, "soha.vn": 3, "vietcetera.com": 3,
+    "plo.vn": 3, "anninhthudo.vn": 3, "hanoimoi.vn": 3,
+    "hcmcpv.org.vn": 3, "congan.com.vn": 3, "kinhtedothi.vn": 3,
+    "phapluatplus.vn": 3, "baogiaothong.vn": 3, "danviet.vn": 3,
+
+    # ── US/International: Tier 1 (wire services, public media) ──
+    "apnews.com": 1, "reuters.com": 1, "bbc.com": 1,
+    "bbc.co.uk": 1, "pbs.org": 1, "npr.org": 1,
+
+    # ── US/International: Tier 2 (major outlets) ──
+    "nytimes.com": 2, "washingtonpost.com": 2, "wsj.com": 2,
+    "cnn.com": 2, "nbcnews.com": 2, "abcnews.go.com": 2,
+    "cbsnews.com": 2, "bloomberg.com": 2, "theguardian.com": 2,
+    "usatoday.com": 2, "politico.com": 2, "time.com": 2,
+
+    # ── US/International: Tier 3 (reputable) ──
+    "forbes.com": 3, "businessinsider.com": 3, "cnbc.com": 3,
+    "thehill.com": 3, "axios.com": 3, "aljazeera.com": 3,
+    "france24.com": 3, "dw.com": 3, "scmp.com": 3,
+
+    # ── Tech ──
+    "techcrunch.com": 2, "theverge.com": 2, "arstechnica.com": 2,
+    "wired.com": 2, "engadget.com": 3, "tomshardware.com": 3,
+
+    # ── Fact-checking sites ──
+    "factcheck.org": 1, "snopes.com": 2, "politifact.com": 2,
+
+    # ── Vietnam extras ──
+    "baotintuc.vn": 1, "znews.vn": 2, "thanhtra.com.vn": 2,
+}
+
+
+def _get_domain(url):
+    """Extract domain from URL."""
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(url).hostname or ""
+        # Strip www.
+        if host.startswith("www."):
+            host = host[4:]
+        return host
+    except Exception:
+        return ""
+
+
 def _multi_search(queries):
-    """Search all query variants and deduplicate by URL."""
+    """Search all query variants in parallel, deduplicate, sort by trust + recency."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Parallel search — 3 queries at once instead of sequential
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        results = list(pool.map(_web_search, queries))
+
     seen_urls = set()
     all_sources = []
-    for q in queries:
-        for src in _web_search(q):
+    for batch in results:
+        for src in batch:
             if src["url"] not in seen_urls:
                 seen_urls.add(src["url"])
+                domain = _get_domain(src["url"])
+                tier = TRUSTED_DOMAINS.get(domain, 99)
+                src["tier"] = tier
                 all_sources.append(src)
+
+    # Sort: trusted first, then sources with dates before undated
+    all_sources.sort(key=lambda s: (s["tier"], not s.get("date")))
     return all_sources[:15]
 
 
@@ -109,7 +190,7 @@ def _web_search(query):
     try:
         req = urllib.request.Request(
             "https://google.serper.dev/search",
-            data=json.dumps({"q": query, "num": 10}).encode(),
+            data=json.dumps({"q": query, "num": 7}).encode(),
             headers={
                 "X-API-KEY": SERPER_API_KEY,
                 "Content-Type": "application/json",
@@ -125,6 +206,7 @@ def _web_search(query):
                 "title": r.get("title", ""),
                 "url": r.get("link", ""),
                 "snippet": r.get("snippet", ""),
+                "date": r.get("date", ""),  # e.g. "2 hours ago", "Mar 21, 2026"
             }
             for r in organic[:10]
         ]
@@ -139,42 +221,35 @@ def _web_search(query):
 def _classify_news(text, sources):
     truncated = text[:500]
 
-    source_summary = (
-        "\n".join(f"- [{s['title']}]: {s['snippet']}" for s in sources)
-        if sources
-        else "(no sources available)"
-    )
+    tier_labels = {1: "⭐ OFFICIAL", 2: "✓ MAJOR", 3: "• KNOWN"}
+    source_lines = []
+    for s in sources:
+        tier = s.get("tier", 99)
+        badge = tier_labels.get(tier, "")
+        date = s.get("date", "")
+        date_str = f" ({date})" if date else ""
+        source_lines.append(f"- {badge} [{s['title']}]{date_str}: {s['snippet']}")
+    source_summary = "\n".join(source_lines) if source_lines else "(no sources available)"
 
-    from datetime import date
-    today = date.today().isoformat()
+    from datetime import date as _date
+    today = _date.today().isoformat()
 
-    prompt = f"""You are a fact-checker. Today is {today}. Return ONLY JSON.
-
-IMPORTANT: Base your verdict ONLY on the SOURCES below — NOT on your training data.
-The sources are real-time web search results from today.
-Your knowledge cutoff does NOT matter.
+    prompt = f"""Fact-checker. Today: {today}. Return JSON ONLY. Use ONLY sources below, not training data.
 
 Rules:
-- If SOURCES confirm the claim -> "real"
-- If SOURCES contradict the claim -> "fake"
-- If no sources or sources are irrelevant -> "uncertain"
-- Rumors/opinions/non-news/ads/memes -> "uncertain"
-- NEVER say "beyond knowledge cutoff" — use the sources instead
-
-Confidence levels (pick ONE based on source quality):
-- "very_high": 3+ reliable sources clearly confirm/deny
-- "high": 1-2 reliable sources support the verdict
-- "medium": sources are relevant but not conclusive
-- "low": few relevant sources, mostly indirect
-- "very_low": no relevant sources found, pure guess
+- Sources confirm → "real", contradict → "fake", irrelevant/none → "uncertain"
+- ⭐ OFFICIAL/✓ MAJOR sources outweigh unmarked ones
+- More recent sources override older ones when contradicting
+- confidence: "very_high"|"high"|"medium"|"low"|"very_low" (based on source count+quality)
+- summary: 1-2 sentences in Vietnamese
 
 CLAIM:
 {truncated}
 
-TODAY'S WEB SEARCH RESULTS:
+SOURCES:
 {source_summary}
 
-{{"verdict":"real|fake|uncertain","confidence":"very_high|high|medium|low|very_low","summary":"1-2 sentence Vietnamese explanation based on sources"}}"""
+{{"verdict":"real|fake|uncertain","confidence":"...","summary":"..."}}"""
 
     try:
         content = _openai_chat(
@@ -213,11 +288,18 @@ TODAY'S WEB SEARCH RESULTS:
         if not sources:
             summary = "Web search khong kha dung, ket qua chi dua tren AI.\n" + summary
 
+        # Clean internal fields before returning to app
+        clean_sources = [
+            {"title": s["title"], "url": s["url"], "snippet": s["snippet"],
+             **({"date": s["date"]} if s.get("date") else {})}
+            for s in sources
+        ]
+
         return {
             "verdict": verdict,
             "confidence": confidence,
             "summary": summary,
-            "sources": sources,
+            "sources": clean_sources,
         }
 
     except Exception as e:
@@ -229,15 +311,10 @@ TODAY'S WEB SEARCH RESULTS:
 # ---------------------------------------------------------------------------
 
 def _openai_chat(messages, temperature=0.0, max_tokens=100, json_mode=False):
-    """Call OpenAI Responses API (gpt-5.4-mini — fastest, most accurate)."""
-    # Convert chat messages format to Responses API input
-    input_msgs = []
-    for m in messages:
-        input_msgs.append({"role": m["role"], "content": m["content"]})
-
+    """Call OpenAI Responses API (gpt-5.4-mini)."""
     body = {
         "model": "gpt-5.4-mini",
-        "input": input_msgs,
+        "input": messages,
         "temperature": temperature,
         "max_output_tokens": max_tokens,
     }
@@ -253,7 +330,7 @@ def _openai_chat(messages, temperature=0.0, max_tokens=100, json_mode=False):
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=45) as resp:
+    with urllib.request.urlopen(req, timeout=20) as resp:
         data = json.loads(resp.read())
 
     # Responses API returns output[].content[].text
@@ -267,42 +344,27 @@ def _openai_chat(messages, temperature=0.0, max_tokens=100, json_mode=False):
 
 
 def _extract_json(raw):
-    import re
+    """Parse JSON from GPT response. Since we use json_mode, output should be clean."""
     try:
-        s = re.sub(r"```json\s*", "", raw, flags=re.IGNORECASE)
-        s = re.sub(r"```\s*", "", s)
+        import re
+        s = re.sub(r"```json\s*|```\s*", "", raw, flags=re.IGNORECASE)
         s = re.sub(r"<think>[\s\S]*?</think>", "", s, flags=re.IGNORECASE)
-        s = s.strip()
-
-        start = s.find("{")
-        if start == -1:
-            return None
-
-        depth = 0
-        end = None
-        for i in range(start, len(s)):
-            if s[i] == "{":
-                depth += 1
-            elif s[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    end = i
-                    break
-
-        if end is None:
-            return None
-
-        return json.loads(s[start : end + 1])
+        return json.loads(s.strip())
     except Exception:
         return None
 
 
 def _uncertain_result(text, sources, summary):
+    clean = [
+        {"title": s["title"], "url": s["url"], "snippet": s["snippet"],
+         **({"date": s["date"]} if s.get("date") else {})}
+        for s in sources
+    ] if sources else []
     return {
         "verdict": "uncertain",
         "confidence": 0.0,
         "summary": summary,
-        "sources": sources,
+        "sources": clean,
     }
 
 

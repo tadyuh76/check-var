@@ -116,14 +116,17 @@ Future<CheckResult> factCheck(String cleanedText) async {
 
     final verdictStr =
         (data['verdict'] as String? ?? 'uncertain').toLowerCase();
+
+    // "not_news" → treat as uncertain with 0 confidence (no fact-check ran)
     final verdict = switch (verdictStr) {
       'real' => Verdict.real,
       'fake' => Verdict.fake,
       _ => Verdict.uncertain,
     };
 
-    final confidence =
-        (data['confidence'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0;
+    final confidence = verdictStr == 'not_news'
+        ? 0.0
+        : (data['confidence'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.0;
     final summary = data['summary'] as String? ?? '';
 
     final sourcesJson = data['sources'] as List<dynamic>? ?? [];
