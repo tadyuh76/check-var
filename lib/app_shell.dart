@@ -5,7 +5,11 @@ import 'package:provider/provider.dart';
 import 'controllers/news_check_controller.dart';
 import 'core/platform_channel.dart' as core_channel;
 import 'features/scam_call/scam_call_session_manager.dart';
+import 'models/call_result.dart';
+import 'models/history_entry.dart';
 import 'providers/home_state_provider.dart';
+import 'services/history_service.dart';
+import 'services/notification_service.dart';
 import 'services/platform_channel.dart';
 import 'services/shake_service.dart';
 import 'screens/home_screen.dart';
@@ -27,6 +31,8 @@ class _AppShellState extends State<AppShell> {
   late final ScamCallSessionManager _sessionManager;
   bool _isProcessing = false;
   bool _hasNavigatedToResult = false;
+  DateTime? _callStartTime;
+  String? _callerNumber;
 
   final _screens = const [
     HistoryScreen(),
@@ -37,7 +43,9 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _sessionManager = ScamCallSessionManager();
+    _sessionManager = ScamCallSessionManager(
+      onSessionFinalized: _onSessionFinalized,
+    );
     ShakeService.instance.startListening();
     _shakeSub = ShakeService.instance.onShake.listen(_handleShake);
     _eventSub = core_channel.PlatformChannel.shakeEvents.listen(_handlePlatformEvent);
@@ -51,14 +59,24 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
+  Future<void> _onSessionFinalized(CallResult result) async {
+    final entry = HistoryEntry.fromCallResult(result);
+    await HistoryService.instance.save(entry);
+    await NotificationService.showScamCallResult(
+      result,
+      historyEntryId: entry.id,
+    );
+  }
+
   void _handlePlatformEvent(Map<String, dynamic> event) {
     final type = event['type'] as String?;
     switch (type) {
       case 'call_state':
         final isActive = event['isActive'] as bool? ?? false;
-        debugPrint('AppShell: call_state isActive=$isActive');
+        final callerDisplayText = event['callerDisplayText'] as String?;
+        debugPrint('AppShell: call_state isActive=$isActive, caller=$callerDisplayText');
         if (isActive) {
-          _onCallStarted();
+          _onCallStarted(callerDisplayText: callerDisplayText);
         } else {
           _onCallEnded();
         }
@@ -66,7 +84,7 @@ class _AppShellState extends State<AppShell> {
         debugPrint('AppShell: overlay_activate received');
         _handleOverlayActivate();
       default:
-        break; // shake, caption_text, tts_done handled elsewhere
+        break;
     }
   }
 
@@ -152,6 +170,10 @@ class _AppShellState extends State<AppShell> {
     if (_sessionManager.hasActiveSession) return;
 
     debugPrint('AppShell: starting background scam call session');
+    _sessionManager.setCallTiming(
+      callStartTime: _callStartTime ?? DateTime.now(),
+      callerNumber: _callerNumber,
+    );
     await _sessionManager.startLiveCallSession();
     debugPrint(
       'AppShell: session started, '
@@ -159,9 +181,12 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Future<void> _onCallStarted() async {
+  Future<void> _onCallStarted({String? callerDisplayText}) async {
     final homeState = context.read<HomeStateProvider>();
     if (!homeState.scamCallEnabled) return;
+
+    _callStartTime = DateTime.now();
+    _callerNumber = callerDisplayText;
 
     debugPrint('AppShell: call started — showing overlay reminder');
     try {
@@ -172,21 +197,42 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _onCallEnded() async {
-    // Stop caption capture immediately for optimization,
-    // regardless of who owns the controller.
     try {
       await core_channel.PlatformChannel.stopCaptionCapture();
     } catch (_) {}
 
-    // If the session manager still owns the controller, full cleanup.
     if (_sessionManager.hasActiveSession) {
+      _sessionManager.setCallTiming(
+        callStartTime: _callStartTime ?? DateTime.now(),
+        callerNumber: _callerNumber,
+      );
       await _sessionManager.stopSession();
     } else {
-      // No session was started (user never shook) — hide the reminder overlay.
+      await _saveUnanalyzedCall();
       try {
         await core_channel.PlatformChannel.hideOverlayBubble();
       } catch (_) {}
     }
+
+    _callStartTime = null;
+    _callerNumber = null;
+  }
+
+  Future<void> _saveUnanalyzedCall() async {
+    final now = DateTime.now();
+    final result = CallResult(
+      threatLevel: ThreatLevel.safe,
+      confidence: 0.0,
+      transcript: '',
+      patterns: [],
+      duration: now.difference(_callStartTime ?? now),
+      callerNumber: _callerNumber,
+      callStartTime: _callStartTime ?? now,
+      callEndTime: now,
+      wasAnalyzed: false,
+    );
+    final entry = HistoryEntry.fromCallResult(result);
+    await HistoryService.instance.save(entry);
   }
 
   @override
