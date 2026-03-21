@@ -31,7 +31,8 @@ import android.widget.TextView
  *   - Expanded: frosted-glass pill card showing threat verdict, confidence %,
  *     and color-coded progress bar
  *
- * The bubble is draggable.  Tap collapsed → open app.  Tap expanded → dismiss.
+ * The bubble is draggable.  Tap collapsed → activate detection / expand card.
+ * Tap expanded → dismiss.
  * Auto-collapses after a timeout (except scam, which stays until dismissed).
  */
 class OverlayBubbleService : Service() {
@@ -643,20 +644,19 @@ class OverlayBubbleService : Service() {
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!moved) {
-                        if (isExpanded) collapse() else launchApp()
+                        when {
+                            isExpanded -> collapse()
+                            sessionStatus == "idle" || sessionStatus == "connecting" -> {
+                                ServiceBridge.instance.emitOverlayActivate()
+                            }
+                            else -> expand()  // collapsed + pipeline running → show card
+                        }
                     }
                     true
                 }
                 else -> false
             }
         }
-    }
-
-    private fun launchApp() {
-        val intent = packageManager.getLaunchIntentForPackage(packageName) ?: return
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        intent.putExtra(MainActivity.EXTRA_APP_ACTION, MainActivity.ACTION_OPEN_CALL_DEBUG)
-        startActivity(intent)
     }
 
     // ═════════════════════════════════════════════════════════════════════════
