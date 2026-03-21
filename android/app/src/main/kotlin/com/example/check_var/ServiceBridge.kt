@@ -32,7 +32,6 @@ class ServiceBridge private constructor() {
     var mode: String = "news"
     private val mainHandler = Handler(Looper.getMainLooper())
     private var eventSink: EventChannel.EventSink? = null
-    private var pendingAppAction: String? = null
 
     // ── Scam-call state ─────────────────────────────────────────────────────
     private var newsDetectionEnabled: Boolean = false
@@ -60,7 +59,6 @@ class ServiceBridge private constructor() {
 
     fun attachEventSink(events: EventChannel.EventSink?) {
         eventSink = events
-        flushPendingAppAction()
     }
 
     fun detachEventSink() {
@@ -352,14 +350,6 @@ class ServiceBridge private constructor() {
         )
     }
 
-    fun handleAppAction(action: String) {
-        if (eventSink == null) {
-            pendingAppAction = action
-            return
-        }
-        emitAppAction(action)
-    }
-
     private fun startCallMonitor() {
         CallMonitorService.onCallStateChanged = { event ->
             val active = event["isActive"] as? Boolean ?: false
@@ -376,21 +366,6 @@ class ServiceBridge private constructor() {
         CallMonitorService.onCallStateChanged = null
         val intent = Intent(context, CallMonitorService::class.java)
         context.stopService(intent)
-    }
-
-    private fun emitAppAction(action: String) {
-        eventSink?.success(
-            mapOf(
-                "type" to "overlay_tap",
-                "action" to action,
-            )
-        )
-    }
-
-    private fun flushPendingAppAction() {
-        val action = pendingAppAction ?: return
-        pendingAppAction = null
-        emitAppAction(action)
     }
 
     // ── TTS ─────────────────────────────────────────────────────────────────

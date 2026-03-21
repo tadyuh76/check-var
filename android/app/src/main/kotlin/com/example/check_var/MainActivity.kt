@@ -16,12 +16,9 @@ class MainActivity : FlutterActivity() {
         private const val SCAM_CALL_CHANNEL = "com.checkvar/service"
         /** Channel used by the news-check Dart layer. */
         private const val NEWS_CHANNEL = "com.checkvar/methods"
-        /** Shared event channel (shake, call_state, caption_text, overlay_tap …). */
+        /** Shared event channel (shake, call_state, caption_text, overlay_activate …). */
         private const val EVENT_CHANNEL = "com.checkvar/events"
         private const val PHONE_STATE_PERMISSION_REQUEST = 1003
-
-        const val EXTRA_APP_ACTION = "checkvar_app_action"
-        const val ACTION_OPEN_CALL_DEBUG = "open_call_debug"
 
         var instance: MainActivity? = null
         var pendingScreenText: String? = null
@@ -112,8 +109,6 @@ class MainActivity : FlutterActivity() {
                     bridge.detachEventSink()
                 }
             })
-
-        handleAppActionIntent(intent)
     }
 
     // ── Phone state runtime permission ──────────────────────────────────────
@@ -158,12 +153,5 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleAppActionIntent(intent)
-    }
-
-    private fun handleAppActionIntent(intent: Intent?) {
-        val action = intent?.getStringExtra(EXTRA_APP_ACTION) ?: return
-        intent.removeExtra(EXTRA_APP_ACTION)
-        ServiceBridge.instance.handleAppAction(action)
     }
 }
