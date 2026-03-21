@@ -15,10 +15,10 @@ def lambda_handler(event, context):
         if not text or len(text) < 20:
             return _response(400, {"error": "Text too short"})
 
-        # Step 1: Extract search query + detect non-news
-        query = _extract_search_query(text)
+        # Step 1: Extract search queries + detect non-news
+        queries = _extract_search_query(text)
 
-        if query is None:
+        if queries is None:
             return _response(200, {
                 "verdict": "not_news",
                 "confidence": 1.0,
@@ -26,8 +26,8 @@ def lambda_handler(event, context):
                 "sources": [],
             })
 
-        # Step 2: Web search via Serper
-        sources = _web_search(query)
+        # Step 2: Web search via Serper (search all query variants, deduplicate)
+        sources = _multi_search(queries)
 
         # Step 3: Classify via OpenAI
         result = _classify_news(text, sources)
@@ -52,12 +52,17 @@ def _extract_search_query(text):
                 {
                     "role": "system",
                     "content": (
-                        "You analyze text and return JSON. No explanation.\n"
-                        'If the text contains a factual news claim that can be verified:\n'
-                        '  {"type":"news","query":"<concise Google search query>"}\n'
-                        'If the text is NOT verifiable news (personal questions, opinions, '
-                        'ads, memes, jokes, conversations, product listings, app UI):\n'
-                        '  {"type":"not_news","query":""}'
+                        "You analyze text from a phone screenshot (OCR). Return JSON. No explanation.\n"
+                        "The text may contain noise: ads, UI buttons, navigation, crypto banners, etc.\n"
+                        "IGNORE the noise. Focus on the MAIN content.\n\n"
+                        'If the MAIN content is a verifiable news claim or article headline:\n'
+                        '  {"type":"news","queries":["<query1>","<query2>","<query3>"]}\n'
+                        '  - query1: direct factual claim\n'
+                        '  - query2: rephrased with different keywords\n'
+                        '  - query3: Vietnamese/English alternate (opposite language of query1)\n'
+                        'If the MAIN content is NOT news (personal chat, opinions, product listings, '
+                        'app notifications, memes, jokes, or ONLY ads with no article):\n'
+                        '  {"type":"not_news","queries":[]}'
                     ),
                 },
                 {"role": "user", "content": truncated},
@@ -70,22 +75,35 @@ def _extract_search_query(text):
         parsed = _extract_json(content)
         if parsed and parsed.get("type") == "not_news":
             return None  # Signal: skip fact-checking
-        if parsed and parsed.get("query"):
-            return parsed["query"].strip().strip("\"'")
+        queries = parsed.get("queries", []) if parsed else []
+        if queries and isinstance(queries, list):
+            return [q.strip().strip("\"'") for q in queries if q.strip()]
     except Exception:
         pass
 
     # Fallback: longest line > 20 chars
     lines = [l for l in text.split("\n") if len(l.strip()) > 20]
     if not lines:
-        return text[:100]
+        return [text[:100]]
     longest = max(lines, key=len)
-    return longest[:100]
+    return [longest[:100]]
 
 
 # ---------------------------------------------------------------------------
 # 2. Web search via Serper.dev
 # ---------------------------------------------------------------------------
+
+def _multi_search(queries):
+    """Search all query variants and deduplicate by URL."""
+    seen_urls = set()
+    all_sources = []
+    for q in queries:
+        for src in _web_search(q):
+            if src["url"] not in seen_urls:
+                seen_urls.add(src["url"])
+                all_sources.append(src)
+    return all_sources[:15]
+
 
 def _web_search(query):
     try:
@@ -211,18 +229,23 @@ TODAY'S WEB SEARCH RESULTS:
 # ---------------------------------------------------------------------------
 
 def _openai_chat(messages, temperature=0.0, max_tokens=100, json_mode=False):
-    """Call OpenAI API (gpt-4o-mini — fast, cheap, reliable from AWS)."""
+    """Call OpenAI Responses API (gpt-5.4-mini — fastest, most accurate)."""
+    # Convert chat messages format to Responses API input
+    input_msgs = []
+    for m in messages:
+        input_msgs.append({"role": m["role"], "content": m["content"]})
+
     body = {
-        "model": "gpt-4o-mini",
+        "model": "gpt-5.4-mini",
+        "input": input_msgs,
         "temperature": temperature,
-        "max_tokens": max_tokens,
-        "messages": messages,
+        "max_output_tokens": max_tokens,
     }
     if json_mode:
-        body["response_format"] = {"type": "json_object"}
+        body["text"] = {"format": {"type": "json_object"}}
 
     req = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions",
+        "https://api.openai.com/v1/responses",
         data=json.dumps(body).encode(),
         headers={
             "Authorization": f"Bearer {OPENAI_API_KEY}",
@@ -233,11 +256,14 @@ def _openai_chat(messages, temperature=0.0, max_tokens=100, json_mode=False):
     with urllib.request.urlopen(req, timeout=45) as resp:
         data = json.loads(resp.read())
 
-    return (
-        data.get("choices", [{}])[0]
-        .get("message", {})
-        .get("content", "")
-    )
+    # Responses API returns output[].content[].text
+    output = data.get("output", [])
+    for item in output:
+        if item.get("type") == "message":
+            for part in item.get("content", []):
+                if part.get("type") == "output_text":
+                    return part.get("text", "")
+    return ""
 
 
 def _extract_json(raw):
