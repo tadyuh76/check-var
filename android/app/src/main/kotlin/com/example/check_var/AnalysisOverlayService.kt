@@ -16,6 +16,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -54,392 +55,173 @@ class AnalysisOverlayService : Service() {
 
     private var windowManager: WindowManager? = null
 
-    // Loading overlay (bottom-anchored: translucent header + white card)
+    // Loading
     private var loadingOverlay: View? = null
     private var statusText: TextView? = null
     private var dotViews: List<View>? = null
     private var dotAnimator: ValueAnimator? = null
 
-    // Result card (bottom sheet)
-    private var cardView: FrameLayout? = null
+    // Result
+    private var resultOverlay: View? = null
     private var scrimView: View? = null
-    private var verdictIcon: TextView? = null
-    private var verdictLabel: TextView? = null
-    private var confidenceText: TextView? = null
-    private var summaryText: TextView? = null
-    private var closeButton: TextView? = null
 
     private var autoDismissRunnable: Runnable? = null
     private var safetyTimeoutRunnable: Runnable? = null
+    private var isDismissing = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         instance = this
-        // Use accessibility service's WindowManager when available — TYPE_ACCESSIBILITY_OVERLAY
-        // bypasses ColorOS/OPPO forced transparency on TYPE_APPLICATION_OVERLAY
         val a11y = CheckVarAccessibilityService.instance
         windowManager = if (a11y != null) {
             a11y.getSystemService(WINDOW_SERVICE) as WindowManager
         } else {
             getSystemService(WINDOW_SERVICE) as WindowManager
         }
-        createLoadingOverlay()
-        startDotAnimation()
+        showLoading()
 
         safetyTimeoutRunnable = Runnable { stopSelf() }
         mainHandler.postDelayed(safetyTimeoutRunnable!!, 60_000)
     }
 
-    private fun dp(value: Int): Int {
-        return TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics
-        ).toInt()
-    }
+    private fun dp(value: Int): Int =
+        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()
 
     private fun screenHeight(): Int = resources.displayMetrics.heightPixels
 
-    /** TYPE_ACCESSIBILITY_OVERLAY if a11y service is active, else TYPE_APPLICATION_OVERLAY */
-    private fun overlayType(): Int {
-        return if (CheckVarAccessibilityService.instance != null) {
+    private fun overlayType(): Int =
+        if (CheckVarAccessibilityService.instance != null)
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-        } else {
+        else
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        }
-    }
 
-    // ── Loading overlay (translucent header + white card, bottom-anchored) ──
+    // ── Loading ──────────────────────────────────────────────────────────
 
-    private fun createLoadingOverlay() {
-        // No slide animation — appears instantly to avoid ColorOS alpha blending
-        // FrameLayout wrapper with hardware layer ensures opaque rendering on all ROMs
+    private fun showLoading() {
         val root = FrameLayout(this).apply {
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            // Opaque background — PixelFormat.OPAQUE requires every pixel filled
-            setBackgroundColor(Color.parseColor("#F0F0F5"))
+            clipChildren = false
+            clipToPadding = false
+            setPadding(0, dp(24), 0, 0)
         }
 
-        val content = LinearLayout(this).apply {
+        // Floating card
+        val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            background = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = dp(28).toFloat()
+            }
+            elevation = dp(8).toFloat()
+            setPadding(dp(28), dp(28), dp(28), dp(32))
         }
-        root.addView(content, FrameLayout.LayoutParams(
+        root.addView(card, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            setMargins(dp(16), 0, dp(16), dp(16))
+            gravity = Gravity.BOTTOM
+        })
 
-        // ── Section 1: Header (icon + app name, fills top space) ──
-        // Solid color #F0F0F5 instead of alpha transparency to avoid ROM bugs
-        // Header has no rounded corners itself — the root FrameLayout handles that
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#F0F0F5"))
-            setPadding(dp(24), dp(24), dp(24), dp(24))
-        }
-
-        // Logo (blue circle + checkmark)
-        header.addView(TextView(this).apply {
+        // Blue circle logo
+        card.addView(TextView(this).apply {
             text = "✓"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.parseColor("#2196F3"))
             }
-            val s = dp(56)
+            val s = dp(44)
             layoutParams = LinearLayout.LayoutParams(s, s).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
             }
         })
 
         // App name
-        header.addView(TextView(this).apply {
+        card.addView(TextView(this).apply {
             text = "CheckVar"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            setTextColor(Color.parseColor("#1A1A1A"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(Color.parseColor("#111111"))
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(12); gravity = Gravity.CENTER_HORIZONTAL }
-        })
-
-        // Header fills remaining space (weight=1)
-        content.addView(header, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
-
-        // ── Section 2: White card (handle + status + wave bars) ──
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setBackgroundColor(Color.WHITE)
-            setPadding(dp(24), dp(12), dp(24), dp(32))
-        }
-
-        // Handle bar
-        card.addView(View(this).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#CCCCCC"))
-                cornerRadius = dp(2).toFloat()
-            }
-            layoutParams = LinearLayout.LayoutParams(dp(40), dp(4)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(20)
-            }
+            ).apply { topMargin = dp(10); gravity = Gravity.CENTER_HORIZONTAL }
         })
 
         // Status text
         statusText = TextView(this).apply {
             text = pendingInitialStatus ?: ""
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Color.parseColor("#666666"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(Color.parseColor("#999999"))
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(16); gravity = Gravity.CENTER_HORIZONTAL }
+            ).apply { topMargin = dp(20); gravity = Gravity.CENTER_HORIZONTAL }
         }
         card.addView(statusText)
 
-        // Wave bars row
-        val dotsRow = LinearLayout(this).apply {
+        // Wave bars
+        val barsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { gravity = Gravity.CENTER_HORIZONTAL }
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(32)
+            ).apply { topMargin = dp(14); gravity = Gravity.CENTER_HORIZONTAL }
         }
-        val dots = mutableListOf<View>()
+        val bars = mutableListOf<View>()
         for (i in 0 until 5) {
-            val dot = View(this).apply {
+            val bar = View(this).apply {
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(5).toFloat()
+                    cornerRadius = dp(3).toFloat()
                     setColor(Color.parseColor("#2196F3"))
                 }
-                layoutParams = LinearLayout.LayoutParams(dp(10), dp(12)).apply {
-                    marginStart = if (i > 0) dp(8) else 0
+                layoutParams = LinearLayout.LayoutParams(dp(6), dp(12)).apply {
+                    marginStart = if (i > 0) dp(5) else 0
+                    gravity = Gravity.CENTER_VERTICAL
                 }
             }
-            dots.add(dot)
-            dotsRow.addView(dot)
+            bars.add(bar)
+            barsRow.addView(bar)
         }
-        dotViews = dots
-        card.addView(dotsRow)
+        dotViews = bars
+        card.addView(barsRow)
 
-        content.addView(card, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
-
-        // Window: bottom-anchored, 40% screen height
-        // TYPE_ACCESSIBILITY_OVERLAY bypasses ColorOS forced transparency
+        // Window
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            (screenHeight() * 0.4).toInt(),
+            WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType(),
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.OPAQUE
-        ).apply {
-            gravity = Gravity.BOTTOM
-        }
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.BOTTOM }
+
         windowManager?.addView(root, params)
         loadingOverlay = root
+
+        // Slide up
+        root.translationY = dp(400).toFloat()
+        root.animate()
+            .translationY(0f)
+            .setDuration(500)
+            .setInterpolator(DecelerateInterpolator(2.5f))
+            .start()
+
+        startDotAnimation()
     }
 
-    // ── Result card (bottom sheet, created on result) ────────────────────
-
-    private fun createResultCard(verdict: String, verdictLabel: String, confidence: String, summary: String, closeLabel: String) {
-        // Scrim (dim background)
-        scrimView = View(this).apply {
-            setBackgroundColor(Color.parseColor("#99000000"))
-            alpha = 0f
-        }
-        val scrimParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            overlayType(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT
-        )
-        windowManager?.addView(scrimView, scrimParams)
-        scrimView?.animate()?.alpha(1f)?.setDuration(300)?.start()
-
-        // Card wrapper with rounded top corners
-        val wrapper = FrameLayout(this).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.WHITE)
-                cornerRadii = floatArrayOf(
-                    dp(20).toFloat(), dp(20).toFloat(),
-                    dp(20).toFloat(), dp(20).toFloat(),
-                    0f, 0f, 0f, 0f
-                )
-            }
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        }
-
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(24), dp(16), dp(24), dp(24))
-        }
-        wrapper.addView(card, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-
-        // Handle bar
-        card.addView(View(this).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#CCCCCC"))
-                cornerRadius = dp(2).toFloat()
-            }
-            layoutParams = LinearLayout.LayoutParams(dp(40), dp(4)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                bottomMargin = dp(12)
-            }
-        })
-
-        // ScrollView for result
-        val scrollView = ScrollView(this).apply {
-            isFillViewport = true
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-            )
-        }
-
-        val resultContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, dp(8), 0, dp(8))
-        }
-
-        verdictIcon = TextView(this).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 40f)
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { gravity = Gravity.CENTER_HORIZONTAL }
-        }
-        resultContainer.addView(verdictIcon)
-
-        this.verdictLabel = TextView(this).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(8); gravity = Gravity.CENTER_HORIZONTAL }
-        }
-        resultContainer.addView(this.verdictLabel)
-
-        confidenceText = TextView(this).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(4); gravity = Gravity.CENTER_HORIZONTAL }
-        }
-        resultContainer.addView(confidenceText)
-
-        // Divider
-        resultContainer.addView(View(this).apply {
-            setBackgroundColor(Color.parseColor("#E0E0E0"))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(1)
-            ).apply { topMargin = dp(16); bottomMargin = dp(16) }
-        })
-
-        summaryText = TextView(this).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Color.parseColor("#333333"))
-            gravity = Gravity.START
-            setLineSpacing(dp(4).toFloat(), 1f)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
-        resultContainer.addView(summaryText)
-
-        scrollView.addView(resultContainer)
-        card.addView(scrollView)
-
-        // Close button
-        closeButton = TextView(this).apply {
-            text = closeLabel
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#2196F3"))
-                cornerRadius = dp(12).toFloat()
-            }
-            setPadding(dp(24), dp(14), dp(24), dp(14))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(12) }
-            setOnClickListener { stopSelf() }
-        }
-        card.addView(closeButton)
-
-        // Set verdict data — labels come localized from Flutter
-        when (verdict) {
-            "real" -> {
-                verdictIcon?.text = "✅"
-                this.verdictLabel?.setTextColor(Color.parseColor("#4CAF50"))
-                confidenceText?.setTextColor(Color.parseColor("#4CAF50"))
-            }
-            "fake" -> {
-                verdictIcon?.text = "❌"
-                this.verdictLabel?.setTextColor(Color.parseColor("#F44336"))
-                confidenceText?.setTextColor(Color.parseColor("#F44336"))
-            }
-            "error" -> {
-                verdictIcon?.text = "⚠️"
-                this.verdictLabel?.setTextColor(Color.parseColor("#F44336"))
-                confidenceText?.visibility = View.GONE
-            }
-            else -> {
-                verdictIcon?.text = "❓"
-                this.verdictLabel?.setTextColor(Color.parseColor("#FF9800"))
-                confidenceText?.setTextColor(Color.parseColor("#FF9800"))
-            }
-        }
-        this.verdictLabel?.text = verdictLabel
-        confidenceText?.text = confidence
-        summaryText?.text = summary
-
-        // Add card window at bottom, 70% height, touchable for scrolling
-        val cardParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            (screenHeight() * 0.7).toInt(),
-            overlayType(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.BOTTOM
-        }
-        windowManager?.addView(wrapper, cardParams)
-        cardView = wrapper
-    }
-
-    // ── Dot animation ───────────────────────────────────────────────────
+    // ── Dot animation ────────────────────────────────────────────────────
 
     private fun startDotAnimation() {
         dotAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 1500
+            duration = 1200
             repeatCount = ValueAnimator.INFINITE
             interpolator = LinearInterpolator()
             addUpdateListener { animator ->
@@ -448,9 +230,9 @@ class AnalysisOverlayService : Service() {
                     val offset = index.toFloat() / 5f
                     val wave = Math.sin(((progress + offset) * 2 * Math.PI)).toFloat()
                     val absWave = Math.abs(wave)
-                    val params = dot.layoutParams as LinearLayout.LayoutParams
-                    params.height = dp(12 + (absWave * 20).toInt())
-                    dot.layoutParams = params
+                    val p = dot.layoutParams as LinearLayout.LayoutParams
+                    p.height = dp(8 + (absWave * 24).toInt())
+                    dot.layoutParams = p
                     dot.alpha = 0.3f + (absWave * 0.7f)
                 }
             }
@@ -458,41 +240,266 @@ class AnalysisOverlayService : Service() {
         }
     }
 
-    // ── Status updates ──────────────────────────────────────────────────
+    // ── Status ────────────────────────────────────────────────────────────
 
     private fun setStatus(text: String) {
         statusText?.text = text
     }
 
-    private fun setResult(verdict: String, verdictLabel: String, confidence: String, summary: String, closeLabel: String) {
+    // ── Result / Error ────────────────────────────────────────────────────
+
+    private fun setResult(verdict: String, vLabel: String, confidence: String, summary: String, closeLabel: String) {
         safetyTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         dotAnimator?.cancel()
 
-        loadingOverlay?.let {
-            try { windowManager?.removeView(it) } catch (_: Exception) {}
-        }
-        loadingOverlay = null
+        // Slide loading card down, then show result
+        loadingOverlay?.animate()
+            ?.translationY(dp(400).toFloat())
+            ?.alpha(0f)
+            ?.setDuration(300)
+            ?.setInterpolator(DecelerateInterpolator())
+            ?.withEndAction {
+                loadingOverlay?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
+                loadingOverlay = null
+            }
+            ?.start()
 
-        createResultCard(verdict, verdictLabel, confidence, summary, closeLabel)
+        mainHandler.postDelayed({
+            showResultCard(verdict, vLabel, confidence, summary, closeLabel)
+        }, 200)
 
-        autoDismissRunnable = Runnable { stopSelf() }
-        mainHandler.postDelayed(autoDismissRunnable!!, 15000)
+        autoDismissRunnable = Runnable { dismissWithAnimation() }
+        mainHandler.postDelayed(autoDismissRunnable!!, 15_000)
     }
 
-    private fun setError(message: String, errorLabel: String = "Error", closeLabel: String = "Close") {
+    private fun setError(message: String, errorLabel: String, closeLabel: String) {
         safetyTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         dotAnimator?.cancel()
 
-        loadingOverlay?.let {
-            try { windowManager?.removeView(it) } catch (_: Exception) {}
-        }
-        loadingOverlay = null
+        loadingOverlay?.animate()
+            ?.translationY(dp(400).toFloat())
+            ?.alpha(0f)
+            ?.setDuration(300)
+            ?.setInterpolator(DecelerateInterpolator())
+            ?.withEndAction {
+                loadingOverlay?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
+                loadingOverlay = null
+            }
+            ?.start()
 
-        createResultCard("error", errorLabel, "", message, closeLabel)
+        mainHandler.postDelayed({
+            showResultCard("error", errorLabel, "", message, closeLabel)
+        }, 200)
 
-        autoDismissRunnable = Runnable { stopSelf() }
-        mainHandler.postDelayed(autoDismissRunnable!!, 8000)
+        autoDismissRunnable = Runnable { dismissWithAnimation() }
+        mainHandler.postDelayed(autoDismissRunnable!!, 8_000)
     }
+
+    // ── Result card ──────────────────────────────────────────────────────
+
+    private fun showResultCard(verdict: String, vLabel: String, confidence: String, summary: String, closeLabel: String) {
+        // Scrim
+        scrimView = View(this).apply {
+            setBackgroundColor(Color.parseColor("#55000000"))
+            alpha = 0f
+            setOnClickListener { dismissWithAnimation() }
+        }
+        windowManager?.addView(scrimView, WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ))
+        scrimView?.animate()?.alpha(1f)?.setDuration(350)?.start()
+
+        // Card root
+        val root = FrameLayout(this).apply {
+            clipChildren = false
+            clipToPadding = false
+            setPadding(0, dp(24), 0, 0)
+        }
+
+        val wrapper = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = dp(28).toFloat()
+            }
+            elevation = dp(16).toFloat()
+        }
+        root.addView(wrapper, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ).apply {
+            setMargins(dp(12), 0, dp(12), dp(12))
+        })
+
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(24), dp(14), dp(24), dp(24))
+        }
+        wrapper.addView(card, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        // Handle
+        card.addView(View(this).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#DDDDDD"))
+                cornerRadius = dp(3).toFloat()
+            }
+            layoutParams = LinearLayout.LayoutParams(dp(36), dp(5)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                bottomMargin = dp(20)
+            }
+        })
+
+        // Verdict emoji
+        val icon = TextView(this).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 44f)
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        }
+        card.addView(icon)
+
+        // Verdict label
+        val label = TextView(this).apply {
+            text = vLabel
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(8); gravity = Gravity.CENTER_HORIZONTAL }
+        }
+        card.addView(label)
+
+        // Confidence
+        val conf = TextView(this).apply {
+            text = confidence
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(4); gravity = Gravity.CENTER_HORIZONTAL }
+        }
+        card.addView(conf)
+
+        // Color by verdict
+        when (verdict) {
+            "real" -> {
+                icon.text = "✅"
+                label.setTextColor(Color.parseColor("#4CAF50"))
+                conf.setTextColor(Color.parseColor("#4CAF50"))
+            }
+            "fake" -> {
+                icon.text = "❌"
+                label.setTextColor(Color.parseColor("#F44336"))
+                conf.setTextColor(Color.parseColor("#F44336"))
+            }
+            "error" -> {
+                icon.text = "⚠️"
+                label.setTextColor(Color.parseColor("#F44336"))
+                conf.visibility = View.GONE
+            }
+            else -> {
+                icon.text = "❓"
+                label.setTextColor(Color.parseColor("#FF9800"))
+                conf.setTextColor(Color.parseColor("#FF9800"))
+            }
+        }
+
+        // Divider
+        card.addView(View(this).apply {
+            setBackgroundColor(Color.parseColor("#F0F0F0"))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(1)
+            ).apply { topMargin = dp(20); bottomMargin = dp(16) }
+        })
+
+        // Scrollable summary
+        val scrollView = ScrollView(this).apply {
+            isFillViewport = true
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            )
+        }
+        scrollView.addView(TextView(this).apply {
+            text = summary
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(Color.parseColor("#444444"))
+            setLineSpacing(dp(4).toFloat(), 1f)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        })
+        card.addView(scrollView)
+
+        // Close button
+        card.addView(TextView(this).apply {
+            text = closeLabel
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#2196F3"))
+                cornerRadius = dp(14).toFloat()
+            }
+            setPadding(dp(24), dp(14), dp(24), dp(14))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(16) }
+            setOnClickListener { dismissWithAnimation() }
+        })
+
+        // Window: 65% height
+        windowManager?.addView(root, WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            (screenHeight() * 0.65).toInt(),
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.BOTTOM })
+
+        resultOverlay = root
+
+        // Slide up
+        root.translationY = (screenHeight() * 0.65f)
+        root.animate()
+            .translationY(0f)
+            .setDuration(500)
+            .setInterpolator(DecelerateInterpolator(2f))
+            .start()
+    }
+
+    // ── Dismiss with animation ───────────────────────────────────────────
+
+    private fun dismissWithAnimation() {
+        if (isDismissing) return
+        isDismissing = true
+        autoDismissRunnable?.let { mainHandler.removeCallbacks(it) }
+
+        scrimView?.animate()?.alpha(0f)?.setDuration(300)?.start()
+        resultOverlay?.animate()
+            ?.translationY(dp(600).toFloat())
+            ?.setDuration(400)
+            ?.setInterpolator(DecelerateInterpolator())
+            ?.withEndAction { stopSelf() }
+            ?.start()
+            ?: stopSelf()
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────
 
     override fun onDestroy() {
         instance = null
@@ -501,10 +508,10 @@ class AnalysisOverlayService : Service() {
         autoDismissRunnable?.let { mainHandler.removeCallbacks(it) }
         loadingOverlay?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
         scrimView?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
-        cardView?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
+        resultOverlay?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
         loadingOverlay = null
         scrimView = null
-        cardView = null
+        resultOverlay = null
         super.onDestroy()
     }
 }
