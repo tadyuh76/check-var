@@ -271,6 +271,16 @@ class ServiceBridge private constructor() {
         }
     }
 
+    /** Called by OverlayBubbleService when user taps idle overlay to start detection. */
+    fun emitOverlayActivate() {
+        Log.d(TAG, "emitOverlayActivate: eventSink=${eventSink != null}")
+        mainHandler.post {
+            eventSink?.success(
+                mapOf("type" to "overlay_activate")
+            )
+        }
+    }
+
     // ── Caller identity cache ────────────────────────────────────────────────
 
     fun cacheCallerType(type: CallerIdentityResolver.CallerType) {
