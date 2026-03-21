@@ -5,6 +5,14 @@ import '../models/check_result.dart';
 import '../models/call_result.dart';
 import '../theme/app_theme.dart';
 
+String _confidenceLabel(double confidence) {
+  if (confidence >= 0.85) return 'Rất chắc chắn';
+  if (confidence >= 0.65) return 'Khá chắc chắn';
+  if (confidence >= 0.45) return 'Chưa rõ ràng';
+  if (confidence >= 0.25) return 'Không chắc chắn';
+  return 'Rất không chắc chắn';
+}
+
 class HistoryDetailScreen extends StatelessWidget {
   final HistoryEntry entry;
 
@@ -35,7 +43,7 @@ class HistoryDetailScreen extends StatelessWidget {
       Verdict.uncertain =>
         (AppTheme.warning, Icons.help_outline_rounded, 'Chưa xác định'),
     };
-    final confidence = (entry.confidence * 100).round();
+    final confidenceLabel = _confidenceLabel(entry.confidence);
     final extractedText = entry.extractedText.length > 300
         ? '${entry.extractedText.substring(0, 300)}...'
         : entry.extractedText;
@@ -64,7 +72,7 @@ class HistoryDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Độ tin cậy: $confidence%',
+                confidenceLabel,
                 style: Theme.of(context)
                     .textTheme
                     .bodyLarge

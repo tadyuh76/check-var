@@ -44,5 +44,34 @@ class PlatformChannel {
     await _methods.invokeMethod('requestOverlayPermission');
   }
 
+  // Analysis overlay (system overlay on top of other apps)
+  static Future<void> showAnalysisOverlay() async {
+    await _methods.invokeMethod('showAnalysisOverlay');
+  }
+
+  static Future<void> hideAnalysisOverlay() async {
+    await _methods.invokeMethod('hideAnalysisOverlay');
+  }
+
+  static Future<void> updateAnalysisStatus(String status) async {
+    await _methods.invokeMethod('updateAnalysisStatus', {'status': status});
+  }
+
+  static Future<void> showAnalysisResult({
+    required String verdict,
+    required String confidence,
+    required String summary,
+  }) async {
+    await _methods.invokeMethod('showAnalysisResult', {
+      'verdict': verdict,
+      'confidence': confidence,
+      'summary': summary,
+    });
+  }
+
+  static Future<void> showAnalysisError(String message) async {
+    await _methods.invokeMethod('showAnalysisError', {'message': message});
+  }
+
   static Stream<dynamic> get eventStream => _events.receiveBroadcastStream();
 }

@@ -98,6 +98,32 @@ class MainActivity : FlutterActivity() {
                         startActivity(intent)
                         result.success(null)
                     }
+                    // ── Analysis overlay ──────────────────────────────
+                    "showAnalysisOverlay" -> {
+                        AnalysisOverlayService.show(this)
+                        result.success(null)
+                    }
+                    "hideAnalysisOverlay" -> {
+                        AnalysisOverlayService.hide(this)
+                        result.success(null)
+                    }
+                    "updateAnalysisStatus" -> {
+                        val status = call.argument<String>("status") ?: ""
+                        AnalysisOverlayService.updateStatus(status)
+                        result.success(null)
+                    }
+                    "showAnalysisResult" -> {
+                        val verdict = call.argument<String>("verdict") ?: "uncertain"
+                        val confidence = call.argument<String>("confidence") ?: ""
+                        val summary = call.argument<String>("summary") ?: ""
+                        AnalysisOverlayService.showResult(verdict, confidence, summary)
+                        result.success(null)
+                    }
+                    "showAnalysisError" -> {
+                        val message = call.argument<String>("message") ?: "Đã xảy ra lỗi"
+                        AnalysisOverlayService.showError(message)
+                        result.success(null)
+                    }
                     else -> result.notImplemented()
                 }
             }
