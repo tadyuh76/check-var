@@ -32,12 +32,17 @@ class ServiceBridge private constructor() {
     var mode: String = "news"
     private val mainHandler = Handler(Looper.getMainLooper())
     private var eventSink: EventChannel.EventSink? = null
-    private var pendingAppAction: String? = null
 
     // ── Scam-call state ─────────────────────────────────────────────────────
     private var newsDetectionEnabled: Boolean = false
     private var callDetectionEnabled: Boolean = false
     private var isCallActive: Boolean = false
+
+    /** Cached caller identity from the most recent RINGING event. */
+    var lastCallerType: CallerIdentityResolver.CallerType = CallerIdentityResolver.CallerType.UNDETERMINED
+        private set
+    var lastCallerDisplayText: String? = null
+        private set
     private var tts: TextToSpeech? = null
     private var speakerRoutingActive: Boolean = false
     private var previousSpeakerphoneState: Boolean? = null
@@ -56,7 +61,6 @@ class ServiceBridge private constructor() {
 
     fun attachEventSink(events: EventChannel.EventSink?) {
         eventSink = events
-        flushPendingAppAction()
     }
 
     fun detachEventSink() {
@@ -182,7 +186,8 @@ class ServiceBridge private constructor() {
             "updateOverlayStatus" -> {
                 val threatLevel = call.argument<String>("threatLevel") ?: "safe"
                 val sessionStatus = call.argument<String>("sessionStatus") ?: "idle"
-                OverlayBubbleService.updateStatus(sessionStatus, threatLevel)
+                val confidence = call.argument<Int>("confidence") ?: -1
+                OverlayBubbleService.updateStatus(sessionStatus, threatLevel, confidence)
                 result.success(true)
             }
             // ── TTS ─────────────────────────────────────────────────────
@@ -204,11 +209,19 @@ class ServiceBridge private constructor() {
     // ── Live Caption capture methods ────────────────────────────────────────
 
     private fun startCaptionCapture() {
+        val a11y = CheckVarAccessibilityService.instance
+        Log.w(TAG, "startCaptionCapture: a11yService=${a11y != null}, " +
+                "eventSink=${eventSink != null}")
+        if (a11y == null) {
+            Log.e(TAG, "startCaptionCapture: AccessibilityService NOT RUNNING — " +
+                    "user must enable it in Settings > Accessibility")
+        }
         captionCaptureActive = true
-        CheckVarAccessibilityService.instance?.resetCaptionState()
+        a11y?.resetCaptionState()
     }
 
     private fun stopCaptionCapture() {
+        Log.d(TAG, "stopCaptionCapture: setting captionCaptureActive=false")
         captionCaptureActive = false
     }
 
@@ -251,6 +264,7 @@ class ServiceBridge private constructor() {
 
     /** Called by CheckVarAccessibilityService to emit caption text to Flutter. */
     fun emitCaptionText(text: String) {
+        Log.d(TAG, "emitCaptionText: '${text.take(60)}', eventSink=${eventSink != null}")
         mainHandler.post {
             eventSink?.success(
                 mapOf(
@@ -261,9 +275,34 @@ class ServiceBridge private constructor() {
         }
     }
 
+    /** Called by OverlayBubbleService when user taps idle overlay to start detection. */
+    fun emitOverlayActivate() {
+        Log.d(TAG, "emitOverlayActivate: eventSink=${eventSink != null}")
+        mainHandler.post {
+            eventSink?.success(
+                mapOf("type" to "overlay_activate")
+            )
+        }
+    }
+
+    // ── Caller identity cache ────────────────────────────────────────────────
+
+    fun cacheCallerInfo(type: CallerIdentityResolver.CallerType, displayText: String?) {
+        lastCallerType = type
+        lastCallerDisplayText = displayText
+        Log.d(TAG, "cacheCallerInfo: type=$type, displayText='${displayText?.take(40)}'")
+    }
+
+    fun resetCallerType() {
+        lastCallerType = CallerIdentityResolver.CallerType.UNDETERMINED
+        lastCallerDisplayText = null
+        Log.d(TAG, "resetCallerType: reset to UNDETERMINED")
+    }
+
     // ── Scam-call service orchestration ─────────────────────────────────────
 
     private fun syncServices() {
+        Log.d(TAG, "syncServices: newsDetection=$newsDetectionEnabled, callDetection=$callDetectionEnabled, isCallActive=$isCallActive")
         if (newsDetectionEnabled || callDetectionEnabled) {
             startShakeService()
         } else {
@@ -279,14 +318,23 @@ class ServiceBridge private constructor() {
     }
 
     private fun startShakeService() {
+        Log.d(TAG, "startShakeService: setting onShakeDetected callback")
         ShakeDetectorService.onShakeDetected = {
+            Log.d(TAG, "SHAKE CALLBACK: callDetection=$callDetectionEnabled, isCallActive=$isCallActive, newsDetection=$newsDetectionEnabled, eventSink=${eventSink != null}")
             when {
                 callDetectionEnabled && isCallActive -> {
+                    Log.d(TAG, "SHAKE CALLBACK → emitting CALL shake")
                     emitShake("call")
+                    // Do NOT call bringAppToForeground() — user stays on call screen.
+                    // The overlay bubble is already visible; Dart side starts analysis in background.
                 }
                 newsDetectionEnabled -> {
+                    Log.d(TAG, "SHAKE CALLBACK → emitting NEWS shake")
                     emitShake("news")
                     bringAppToForeground()
+                }
+                else -> {
+                    Log.d(TAG, "SHAKE CALLBACK → NO BRANCH MATCHED, shake ignored")
                 }
             }
         }
@@ -301,20 +349,13 @@ class ServiceBridge private constructor() {
     }
 
     private fun emitShake(mode: String) {
+        Log.d(TAG, "emitShake: mode=$mode, eventSink=${eventSink != null}")
         eventSink?.success(
             mapOf(
                 "type" to "shake",
                 "mode" to mode
             )
         )
-    }
-
-    fun handleAppAction(action: String) {
-        if (eventSink == null) {
-            pendingAppAction = action
-            return
-        }
-        emitAppAction(action)
     }
 
     private fun startCallMonitor() {
@@ -333,21 +374,6 @@ class ServiceBridge private constructor() {
         CallMonitorService.onCallStateChanged = null
         val intent = Intent(context, CallMonitorService::class.java)
         context.stopService(intent)
-    }
-
-    private fun emitAppAction(action: String) {
-        eventSink?.success(
-            mapOf(
-                "type" to "overlay_tap",
-                "action" to action,
-            )
-        )
-    }
-
-    private fun flushPendingAppAction() {
-        val action = pendingAppAction ?: return
-        pendingAppAction = null
-        emitAppAction(action)
     }
 
     // ── TTS ─────────────────────────────────────────────────────────────────

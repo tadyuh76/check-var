@@ -45,6 +45,11 @@ class HistoryEntry {
         'transcript': result.transcript,
         'patterns': result.patterns,
         'duration': result.duration.inSeconds,
+        'callerNumber': result.callerNumber,
+        'wasAnalyzed': result.wasAnalyzed,
+        'summary': result.summary,
+        'advice': result.advice,
+        'scamProbability': result.scamProbability,
       },
     );
   }
@@ -89,6 +94,17 @@ class HistoryEntry {
 
   Duration get callDuration =>
       Duration(seconds: (data['duration'] as int?) ?? 0);
+
+  String? get callerNumber => data['callerNumber'] as String?;
+
+  bool get wasAnalyzed => data['wasAnalyzed'] as bool? ?? true;
+
+  String? get callSummary => data['summary'] as String?;
+
+  String? get callAdvice => data['advice'] as String?;
+
+  double? get scamProbability =>
+      (data['scamProbability'] as num?)?.toDouble();
 
   Map<String, dynamic> toJson() => {
         'id': id,

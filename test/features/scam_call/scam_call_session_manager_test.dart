@@ -7,6 +7,7 @@ import 'package:check_var/features/scam_call/live/live_caption_transcript_gatewa
 import 'package:check_var/features/scam_call/live/simulated_call_scenario.dart';
 import 'package:check_var/features/scam_call/scam_call_controller.dart';
 import 'package:check_var/features/scam_call/scam_call_session_manager.dart';
+import 'package:check_var/models/call_result.dart' show CallResult;
 import 'package:check_var/models/scam_alert.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -93,6 +94,39 @@ void main() {
       ScamCallSessionManager.buildSimulationTranscriptGateway(),
       isA<LiveCaptionTranscriptGateway>(),
     );
+  });
+
+  test('stopSession extracts CallResult and calls onSessionFinalized', () async {
+    final liveGateway = _FakeTranscriptGateway();
+    CallResult? capturedResult;
+
+    final manager = ScamCallSessionManager(
+      liveCallControllerFactory: () => _buildController(liveGateway),
+      simulationControllerFactory: (_) => _buildController(
+        _FakeTranscriptGateway(),
+      ),
+      speakText: (_, {preferSpeaker = false}) async {},
+      stopSpeaking: () async {},
+      onSessionFinalized: (result) async {
+        capturedResult = result;
+      },
+    );
+
+    final startTime = DateTime.now();
+    manager.setCallTiming(
+      callStartTime: startTime,
+      callerNumber: '+84123456789',
+    );
+
+    await manager.startLiveCallSession();
+    expect(manager.hasActiveSession, isTrue);
+
+    await manager.stopSession();
+    expect(manager.hasActiveSession, isFalse);
+    expect(capturedResult, isNotNull);
+    expect(capturedResult!.wasAnalyzed, true);
+    expect(capturedResult!.callerNumber, '+84123456789');
+    expect(capturedResult!.callStartTime, startTime);
   });
 }
 

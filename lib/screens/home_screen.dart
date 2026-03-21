@@ -5,10 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../core/platform_channel.dart' as core_channel;
-import '../features/scam_call/live/live_caption_transcript_gateway.dart';
 import '../features/scam_call/live/simulated_call_scenario.dart';
-import '../features/scam_call/scam_call_controller.dart' as feature;
 import '../features/scam_call/scam_call_screen.dart' as feature_screen;
+import '../features/scam_call/scam_call_session_manager.dart';
 import '../theme/app_theme.dart';
 import '../providers/home_state_provider.dart';
 import '../services/platform_channel.dart';
@@ -107,6 +106,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // All permissions granted
     await PlatformChannel.startShakeService();
     await PlatformChannel.setMode('news');
+    await core_channel.PlatformChannel.setNewsDetectionEnabled(true);
 
     if (!mounted) return;
     context.read<HomeStateProvider>().setNewsCheckEnabled(true);
@@ -120,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _deactivateNewsCheck() async {
+    await core_channel.PlatformChannel.setNewsDetectionEnabled(false);
     await PlatformChannel.stopShakeService();
     if (!mounted) return;
     context.read<HomeStateProvider>().setNewsCheckEnabled(false);
@@ -136,6 +137,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _toggleScamCall(bool isEnabled) async {
     final provider = context.read<HomeStateProvider>();
     if (isEnabled) {
+      await core_channel.PlatformChannel.setCallDetectionEnabled(false);
       provider.setScamCallEnabled(false);
       return;
     }
@@ -143,6 +145,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Turning on — check permissions first.
     final ready = await _ensureLiveCaptionPermissions();
     if (!ready || !mounted) return;
+
+    // Overlay permission is required to bring the app to foreground
+    // when the user shakes during a call (Android 12+ restriction).
+    final hasOverlay = await PlatformChannel.checkOverlayPermission();
+    if (!hasOverlay) {
+      if (!mounted) return;
+      final shouldOpen = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cần quyền hiển thị trên ứng dụng khác'),
+          content: const Text(
+            'CheckVar cần quyền này để hiện lên khi phát hiện lừa đảo '
+            'trong cuộc gọi.\n\n'
+            'Vui lòng bật "Hiển thị trên ứng dụng khác" cho CheckVar.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Để sau'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Mở cài đặt'),
+            ),
+          ],
+        ),
+      );
+      if (shouldOpen == true) {
+        _waitingForPermission = true;
+        await PlatformChannel.requestOverlayPermission();
+        await _waitForResume();
+        final granted = await PlatformChannel.checkOverlayPermission();
+        if (!granted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Quyền hiển thị trên ứng dụng khác chưa được bật.'),
+              ),
+            );
+          }
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    // READ_PHONE_STATE is required by CallMonitorService to listen for
+    // call state changes. Must be granted before starting the service.
+    final phoneGranted =
+        await core_channel.PlatformChannel.requestPhoneStatePermission();
+    if (!phoneGranted || !mounted) return;
+
+    // Enable call detection on the native side — this starts the shake
+    // service and call monitor via syncServices().
+    await core_channel.PlatformChannel.setCallDetectionEnabled(true);
 
     provider.setScamCallEnabled(true);
     if (mounted) {
@@ -166,9 +225,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     if (!mounted || scenario == null) return;
 
-    final controller = feature.ScamCallController(
-      transcriptGateway: LiveCaptionTranscriptGateway(),
-    );
+    final sessionManager = context.read<ScamCallSessionManager>();
+    await sessionManager.startSimulationSession(scenario);
+    if (!mounted) return;
+
+    final controller = sessionManager.detachController();
+    if (controller == null) return;
 
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -177,14 +239,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           modeLabel: 'Simulation: ${scenario.title}',
           disposeController: true,
         ),
-      ),
-    );
-
-    // TTS speaks the script → Live Caption transcribes → pipeline analyzes.
-    unawaited(
-      core_channel.PlatformChannel.speakText(
-        scenario.spokenScript,
-        preferSpeaker: true,
       ),
     );
   }

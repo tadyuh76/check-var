@@ -6,6 +6,7 @@ import 'package:easy_localization/easy_localization.dart';
 import '../../core/api/gemini_scam_text_api.dart';
 import '../../core/api/local_scam_classifier.dart';
 import '../../core/platform_channel.dart';
+import '../../models/call_result.dart' as call_result;
 import '../../models/scam_alert.dart';
 import 'live/scam_call_transcript_gateway.dart';
 import 'live/live_caption_transcript_gateway.dart';
@@ -17,6 +18,7 @@ typedef OverlayStatusCallback =
     Future<void> Function(
       ThreatLevel threatLevel,
       ScamCallSessionStatus sessionStatus,
+      double confidence,
     );
 
 enum ScamCallSessionStatus {
@@ -77,6 +79,18 @@ class ScamCallController extends ChangeNotifier {
   String _summary = '';
   String _advice = '';
   double _confidence = 0;
+
+  // ── EMA smoothing state ──────────────────────────────────────────
+  static const _emaAlpha = 0.35;
+
+  /// Exponential moving average of raw scam probability.  Initialized to
+  /// -1 (sentinel) so the first analysis seeds the value directly.
+  double _emaScamProb = -1.0;
+
+  /// Consecutive analyses where the classifier returned non-safe.
+  /// Decrements by 1 on safe (instead of resetting) to avoid flicker.
+  int _consecutiveNonSafe = 0;
+
   bool _isListening = false;
   bool _analysisInFlight = false;
   String? _errorMessage;
@@ -107,6 +121,37 @@ class ScamCallController extends ChangeNotifier {
     ScamCallSessionStatus.analyzing => 'session_status.analyzing'.tr(),
     ScamCallSessionStatus.error => 'session_status.error'.tr(),
   };
+
+  /// The raw EMA-smoothed scam probability. Returns null if no analysis has run.
+  double? get emaScamProbability => _emaScamProb < 0 ? null : _emaScamProb;
+
+  /// Extracts the controller's current analysis state as a [call_result.CallResult].
+  /// Call this before disposing the controller to capture the final state.
+  call_result.CallResult extractCallResult({
+    required DateTime callStartTime,
+    required DateTime callEndTime,
+    String? callerNumber,
+  }) {
+    // Both ThreatLevel enums (scam_alert.dart and call_result.dart) have
+    // identical value names, so we convert via name lookup.
+    final threat = call_result.ThreatLevel.values.firstWhere(
+      (v) => v.name == _threatLevel.name,
+    );
+    return call_result.CallResult(
+      threatLevel: threat,
+      confidence: _confidence,
+      transcript: _transcript.map((l) => l.text).join(' '),
+      patterns: List.unmodifiable(_patterns),
+      duration: callEndTime.difference(callStartTime),
+      callerNumber: callerNumber,
+      callStartTime: callStartTime,
+      callEndTime: callEndTime,
+      wasAnalyzed: true,
+      summary: _summary.isNotEmpty ? _summary : null,
+      advice: _advice.isNotEmpty ? _advice : null,
+      scamProbability: _emaScamProb < 0 ? null : _emaScamProb,
+    );
+  }
 
   Future<void> startListening() async {
     if (_isListening) {
@@ -153,8 +198,10 @@ class ScamCallController extends ChangeNotifier {
     _analysisInFlight = false;
     _sessionStatus = ScamCallSessionStatus.idle;
     await onOverlayHide?.call();
-    await _publishOverlayStatus();
-    notifyListeners();
+    if (!_disposed) {
+      await _publishOverlayStatus();
+      notifyListeners();
+    }
   }
 
   Future<void> _handleLiveEvent(LiveTranscriptEvent event) async {
@@ -185,6 +232,12 @@ class ScamCallController extends ChangeNotifier {
     if (text.isEmpty) {
       return;
     }
+    debugPrint(
+      'ScamCallController: transcript event '
+      'isFinal=${event.isFinal}, '
+      'len=${text.length}, '
+      'text="${text.length > 60 ? text.substring(0, 60) : text}"',
+    );
 
     if (event.isFinal) {
       // Final transcript — commit it and clear the pending partial.
@@ -235,11 +288,25 @@ class ScamCallController extends ChangeNotifier {
     try {
       // Include both committed finals and the current partial in the window.
       final transcriptWindow = _buildAnalysisText();
+      debugPrint(
+        'ScamCallController: running analysis, '
+        'transcript=${_transcript.length} lines, '
+        'window=${transcriptWindow.length} chars',
+      );
       final result = await _classifier.classifyTranscriptWindow(
         transcriptWindow,
       );
       _lastAnalysisAt = DateTime.now();
+      debugPrint(
+        'ScamCallController: analysis result '
+        'threat=${result.threatLevel.name}, '
+        'confidence=${result.confidence.toStringAsFixed(2)}, '
+        'patterns=${result.patterns}',
+      );
       _applyAnalysis(result);
+    } catch (e, st) {
+      debugPrint('ScamCallController: analysis FAILED: $e\n$st');
+      _errorMessage = 'Analysis error: $e';
     } finally {
       _analysisInFlight = false;
       if (_isListening) {
@@ -251,15 +318,47 @@ class ScamCallController extends ChangeNotifier {
   }
 
   void _applyAnalysis(ScamAnalysisResult result) {
-    if (result.threatLevel.index >= _threatLevel.index) {
-      _threatLevel = result.threatLevel;
-      _confidence = result.confidence;
+    // ── Update EMA ───────────────────────────────────────────────────
+    final prob = result.scamProbability;
+    if (_emaScamProb < 0) {
+      _emaScamProb = prob; // first analysis — seed directly
+    } else {
+      _emaScamProb = _emaAlpha * prob + (1 - _emaAlpha) * _emaScamProb;
+    }
+
+    // ── Update consecutive non-safe counter ──────────────────────────
+    if (result.threatLevel == ThreatLevel.safe) {
+      _consecutiveNonSafe = (_consecutiveNonSafe - 1).clamp(0, 999);
+    } else {
+      _consecutiveNonSafe++;
+    }
+
+    // ── Determine effective threat level from EMA + consecutive gate ─
+    final ThreatLevel effectiveThreat;
+    if (_emaScamProb < 0.50) {
+      effectiveThreat = ThreatLevel.safe;
+    } else if (_consecutiveNonSafe < 2) {
+      effectiveThreat = ThreatLevel.safe; // still gathering signal
+    } else if (_emaScamProb < 0.55) {
+      effectiveThreat = ThreatLevel.suspicious;
+    } else {
+      effectiveThreat = ThreatLevel.scam;
+    }
+
+    _threatLevel = effectiveThreat;
+    _confidence = _emaScamProb;
+
+    // ── Update summary / advice / patterns ───────────────────────────
+    if (effectiveThreat != ThreatLevel.safe) {
       if (result.summary.trim().isNotEmpty) {
         _summary = result.summary;
       }
       if (result.advice.trim().isNotEmpty) {
         _advice = result.advice;
       }
+    } else {
+      _summary = '';
+      _advice = '';
     }
 
     _patterns = {
@@ -347,6 +446,8 @@ class ScamCallController extends ChangeNotifier {
     _summary = '';
     _advice = '';
     _confidence = 0;
+    _emaScamProb = -1.0;
+    _consecutiveNonSafe = 0;
     _errorMessage = null;
     _sessionWarning = null;
     _analysisInFlight = false;
@@ -355,11 +456,14 @@ class ScamCallController extends ChangeNotifier {
   }
 
   Future<void> _publishOverlayStatus() async {
-    await onOverlayStatusUpdate?.call(_threatLevel, _sessionStatus);
+    await onOverlayStatusUpdate?.call(_threatLevel, _sessionStatus, _confidence);
   }
+
+  bool _disposed = false;
 
   @override
   void dispose() {
+    _disposed = true;
     _analysisTimer?.cancel();
     _maxWaitTimer?.cancel();
     _sessionRefreshTimer?.cancel();

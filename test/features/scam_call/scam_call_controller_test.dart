@@ -4,6 +4,7 @@ import 'package:check_var/core/api/gemini_scam_text_api.dart';
 import 'package:check_var/features/scam_call/live/scam_call_transcript_gateway.dart';
 import 'package:check_var/features/scam_call/live/live_transcript_models.dart';
 import 'package:check_var/features/scam_call/scam_call_controller.dart';
+import 'package:check_var/models/call_result.dart' hide ThreatLevel;
 import 'package:check_var/models/scam_alert.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,6 +34,7 @@ void main() {
         const ScamAnalysisResult(
           threatLevel: ThreatLevel.suspicious,
           confidence: 0.81,
+          scamProbability: 0.81,
           patterns: ['khan cap'],
           summary: 'Nguoi goi dang gay ap luc phai hanh dong ngay',
           advice: 'Binh tinh va tu xac minh qua kenh khac',
@@ -53,27 +55,46 @@ void main() {
     expect(controller.transcript, hasLength(2));
     expect(controller.transcript.last.text, 'ban phai chuyen tien ngay bay gio');
     expect(classifier.callCount, 1);
-    expect(controller.threatLevel, ThreatLevel.suspicious);
-    expect(controller.summary, contains('gay ap luc'));
+    // Single analysis: EMA is high but consecutive non-safe is only 1,
+    // so the min-analyses gate keeps threat at safe.
+    expect(controller.threatLevel, ThreatLevel.safe);
   });
 
-  test('escalates threat level monotonically within a session', () async {
+  test('escalates after 2 consecutive scam analyses, then decays on safe', () async {
     final gateway = FakeAgoraLiveTranscriptGateway();
     final classifier = FakeScamTextClassifier(
       queuedResults: [
         const ScamAnalysisResult(
           threatLevel: ThreatLevel.scam,
           confidence: 0.95,
+          scamProbability: 0.95,
+          patterns: ['the qua tang'],
+          summary: 'Nguoi goi yeu cau mua the qua tang',
+          advice: 'Tat may ngay lap tuc',
+        ),
+        const ScamAnalysisResult(
+          threatLevel: ThreatLevel.scam,
+          confidence: 0.90,
+          scamProbability: 0.90,
           patterns: ['the qua tang'],
           summary: 'Nguoi goi yeu cau mua the qua tang',
           advice: 'Tat may ngay lap tuc',
         ),
         const ScamAnalysisResult(
           threatLevel: ThreatLevel.safe,
-          confidence: 0.2,
+          confidence: 0.9,
+          scamProbability: 0.10,
           patterns: [],
-          summary: 'Model became unsure later',
-          advice: 'No action needed',
+          summary: '',
+          advice: '',
+        ),
+        const ScamAnalysisResult(
+          threatLevel: ThreatLevel.safe,
+          confidence: 0.95,
+          scamProbability: 0.05,
+          patterns: [],
+          summary: '',
+          advice: '',
         ),
       ],
     );
@@ -84,13 +105,26 @@ void main() {
     );
 
     await controller.startListening();
+
+    // Analysis 1: EMA=0.95, consecutive=1 → safe (min-analyses gate)
     gateway.emitTranscript('mua the qua tang ngay');
     await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(controller.threatLevel, ThreatLevel.safe);
+
+    // Analysis 2: EMA=0.93, consecutive=2 → scam
+    gateway.emitTranscript('phai mua ngay bay gio');
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(controller.threatLevel, ThreatLevel.scam);
+    expect(controller.summary, contains('the qua tang'));
+
+    // Analysis 3: safe result → consecutive decrements to 1, EMA decays
     gateway.emitTranscript('thoi bo qua di');
     await Future<void>.delayed(const Duration(milliseconds: 30));
 
-    expect(controller.threatLevel, ThreatLevel.scam);
-    expect(controller.summary, contains('the qua tang'));
+    // Analysis 4: another safe → consecutive=0, EMA decays further below 0.50
+    gateway.emitTranscript('ok bye');
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    expect(controller.threatLevel, ThreatLevel.safe);
   });
 
   test('restarts the live session when a go-away event arrives', () async {
@@ -117,6 +151,15 @@ void main() {
         const ScamAnalysisResult(
           threatLevel: ThreatLevel.suspicious,
           confidence: 0.82,
+          scamProbability: 0.82,
+          patterns: ['khan cap'],
+          summary: 'Nguoi goi dang thuc ep hanh dong ngay.',
+          advice: 'Tu xac minh truoc khi lam theo.',
+        ),
+        const ScamAnalysisResult(
+          threatLevel: ThreatLevel.suspicious,
+          confidence: 0.80,
+          scamProbability: 0.80,
           patterns: ['khan cap'],
           summary: 'Nguoi goi dang thuc ep hanh dong ngay.',
           advice: 'Tu xac minh truoc khi lam theo.',
@@ -128,13 +171,16 @@ void main() {
       transcriptGateway: gateway,
       classifier: classifier,
       analysisDebounce: const Duration(milliseconds: 10),
-      onOverlayStatusUpdate: (threatLevel, sessionStatus) async {
+      onOverlayStatusUpdate: (threatLevel, sessionStatus, confidence) async {
         updates.add((threatLevel, sessionStatus));
       },
     );
 
     await controller.startListening();
+    // Two analyses needed for the consecutive gate to pass.
     gateway.emitTranscript('gui tien ngay bay gio');
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    gateway.emitTranscript('chuyen tien ngay');
     await Future<void>.delayed(const Duration(milliseconds: 40));
 
     expect(
@@ -143,8 +189,33 @@ void main() {
     );
     expect(
       updates,
-      contains((ThreatLevel.suspicious, ScamCallSessionStatus.listening)),
+      contains((ThreatLevel.scam, ScamCallSessionStatus.listening)),
     );
+  });
+
+  test('extractCallResult returns current analysis state', () async {
+    final gateway = FakeAgoraLiveTranscriptGateway();
+    final classifier = FakeScamTextClassifier(queuedResults: const []);
+    final controller = ScamCallController(
+      transcriptGateway: gateway,
+      classifier: classifier,
+      analysisDebounce: const Duration(milliseconds: 10),
+    );
+    addTearDown(controller.dispose);
+
+    final now = DateTime.now();
+    final result = controller.extractCallResult(
+      callStartTime: now.subtract(const Duration(minutes: 5)),
+      callEndTime: now,
+      callerNumber: '+84123456789',
+    );
+
+    expect(result.threatLevel.name, ThreatLevel.safe.name);
+    expect(result.wasAnalyzed, true);
+    expect(result.callerNumber, '+84123456789');
+    expect(result.callStartTime, now.subtract(const Duration(minutes: 5)));
+    expect(result.callEndTime, now);
+    expect(result.transcript, isEmpty);
   });
 }
 

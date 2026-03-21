@@ -30,6 +30,10 @@ class HistoryService {
     return entries;
   }
 
+  HistoryEntry? getById(int id) {
+    return _box?.get(id.toString());
+  }
+
   Future<void> delete(int id) async {
     await _box?.delete(id.toString());
   }

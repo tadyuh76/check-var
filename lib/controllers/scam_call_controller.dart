@@ -12,6 +12,7 @@ class ScamCallController extends ChangeNotifier {
   List<String> _patterns = [];
   Duration _duration = Duration.zero;
   String? _error;
+  DateTime? _callStartTime;
 
   CallCheckStatus get status => _status;
   CallResult? get result => _result;
@@ -30,17 +31,22 @@ class ScamCallController extends ChangeNotifier {
     _patterns = [];
     _duration = Duration.zero;
     _error = null;
+    _callStartTime = DateTime.now();
     notifyListeners();
   }
 
   void stopListening() {
     _status = CallCheckStatus.done;
+    final now = DateTime.now();
     _result = CallResult(
       threatLevel: _currentThreat,
       confidence: _confidence,
       transcript: _transcript,
       patterns: _patterns,
       duration: _duration,
+      callStartTime: _callStartTime ?? now,
+      callEndTime: now,
+      wasAnalyzed: _transcript.isNotEmpty,
     );
     notifyListeners();
   }
@@ -54,6 +60,7 @@ class ScamCallController extends ChangeNotifier {
     _patterns = [];
     _duration = Duration.zero;
     _error = null;
+    _callStartTime = null;
     notifyListeners();
   }
 }

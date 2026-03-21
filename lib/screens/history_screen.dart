@@ -177,15 +177,23 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   Widget _buildCallCard(HistoryEntry entry) {
-    final (color, label) = switch (entry.threatLevel) {
-      ThreatLevel.safe => (AppTheme.success, 'threat.safe'.tr()),
-      ThreatLevel.suspicious => (AppTheme.warning, 'threat.suspicious'.tr()),
-      ThreatLevel.scam => (AppTheme.danger, 'threat.scam'.tr()),
-    };
+    final bool analyzed = entry.wasAnalyzed;
+
+    final (color, label) = analyzed
+        ? switch (entry.threatLevel) {
+            ThreatLevel.safe => (AppTheme.success, 'threat.safe'.tr()),
+            ThreatLevel.suspicious => (AppTheme.warning, 'threat.suspicious'.tr()),
+            ThreatLevel.scam => (AppTheme.danger, 'threat.scam'.tr()),
+          }
+        : (Colors.grey, 'call_history.not_analyzed'.tr());
+
     final time = _formatTime(entry.timestamp);
-    final patternsText = entry.patterns.isNotEmpty
-        ? 'call_history.detected'.tr(args: [entry.patterns.join(', ')])
-        : 'call_history.no_abnormal'.tr();
+
+    final subtitleText = analyzed
+        ? (entry.patterns.isNotEmpty
+            ? 'call_history.detected'.tr(args: [entry.patterns.join(', ')])
+            : 'call_history.no_abnormal'.tr())
+        : entry.callerNumber ?? 'call_history.unknown_number'.tr();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -233,7 +241,7 @@ class _HistoryScreenState extends State<HistoryScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                patternsText,
+                subtitleText,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium,

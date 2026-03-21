@@ -10,13 +10,18 @@ import 'controllers/news_check_controller.dart';
 import 'controllers/scam_call_controller.dart';
 import 'services/history_service.dart';
 import 'services/notification_service.dart';
+import 'screens/history_detail_screen.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
   await Hive.initFlutter();
   await HistoryService.instance.init();
-  await NotificationService.init();
+  await NotificationService.init(
+    onNotificationTap: _handleNotificationTap,
+  );
   runApp(
     EasyLocalization(
       supportedLocales: const [Locale('vi'), Locale('en')],
@@ -25,6 +30,19 @@ void main() async {
       startLocale: const Locale('vi'),
       useOnlyLangCode: true,
       child: const CheckVarApp(),
+    ),
+  );
+}
+
+void _handleNotificationTap(String? payload) {
+  if (payload == null) return;
+  final id = int.tryParse(payload);
+  if (id == null) return;
+  final entry = HistoryService.instance.getById(id);
+  if (entry == null) return;
+  navigatorKey.currentState?.push(
+    MaterialPageRoute(
+      builder: (_) => HistoryDetailScreen(entry: entry),
     ),
   );
 }
@@ -44,6 +62,7 @@ class CheckVarApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
           return MaterialApp(
+            navigatorKey: navigatorKey,
             title: 'CheckVar',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,

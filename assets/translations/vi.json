@@ -124,7 +124,9 @@
   },
   "call_history": {
     "detected": "Phát hiện: {}",
-    "no_abnormal": "Không phát hiện dấu hiệu bất thường"
+    "no_abnormal": "Không phát hiện dấu hiệu bất thường",
+    "not_analyzed": "Không phân tích",
+    "unknown_number": "Số không xác định"
   },
   "notification": {
     "analyzing": "Đang phân tích nội dung...",

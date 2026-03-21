@@ -18,7 +18,7 @@ class CallMonitorService : Service() {
         private const val CHANNEL_ID = "call_monitor_channel"
         private const val NOTIFICATION_ID = 3001
 
-        var onCallStateChanged: ((Map<String, Any>) -> Unit)? = null
+        var onCallStateChanged: ((Map<String, Any?>) -> Unit)? = null
     }
 
     private var telephonyManager: TelephonyManager? = null
@@ -53,7 +53,13 @@ class CallMonitorService : Service() {
                 }
             }
             telephonyCallback = callback
-            telephonyManager?.registerTelephonyCallback(executor, callback)
+            try {
+                telephonyManager?.registerTelephonyCallback(executor, callback)
+            } catch (e: SecurityException) {
+                // READ_PHONE_STATE not granted — stop gracefully instead of crashing.
+                android.util.Log.w("CallMonitorService", "Missing READ_PHONE_STATE permission", e)
+                stopSelf()
+            }
         }
     }
 
@@ -68,10 +74,49 @@ class CallMonitorService : Service() {
 
     private fun handleCallState(state: Int) {
         val isActive = CallMonitorPolicy.isCallActive(state)
+        android.util.Log.d("CallMonitor", "handleCallState: state=$state, isActive=$isActive")
 
-        val event = EventPayloadBuilder.buildCallActiveEvent(isActive)
-        onCallStateChanged?.invoke(event)
+        // ── RINGING: read dialer to identify caller ──────────────
+        if (state == android.telephony.TelephonyManager.CALL_STATE_RINGING) {
+            val a11y = CheckVarAccessibilityService.instance
+            val dialerText = a11y?.readDialerCallerInfo()
+            val callerType = CallerIdentityResolver.resolve(dialerText)
+            ServiceBridge.instance.cacheCallerInfo(callerType, dialerText)
+            android.util.Log.d("CallMonitor", "RINGING: dialerText='${dialerText?.take(40)}', callerType=$callerType")
+        }
 
+        // ── OFFHOOK: gate on caller type ─────────────────────────
+        if (isActive) {
+            val callerType = ServiceBridge.instance.lastCallerType
+            if (callerType == CallerIdentityResolver.CallerType.KNOWN_CONTACT) {
+                android.util.Log.d("CallMonitor", "OFFHOOK: known contact — suppressing scam detection")
+                return
+            }
+
+            val event = EventPayloadBuilder.buildCallActiveEvent(
+                isActive,
+                callerDisplayText = ServiceBridge.instance.lastCallerDisplayText,
+            )
+            onCallStateChanged?.invoke(event)
+
+            val overlayIntent = Intent(this, OverlayBubbleService::class.java)
+            startService(overlayIntent)
+        } else {
+            val event = EventPayloadBuilder.buildCallActiveEvent(
+                isActive,
+                callerDisplayText = ServiceBridge.instance.lastCallerDisplayText,
+            )
+            onCallStateChanged?.invoke(event)
+        }
+
+        // ── IDLE: reset caller type cache + hide overlay ─────────
+        // IMPORTANT: Only reset caller type on IDLE, not RINGING.
+        // shouldHideOverlay() returns true for BOTH IDLE and RINGING,
+        // but resetting on RINGING would wipe the cache we just set above,
+        // making the feature silently never work.
+        if (state == android.telephony.TelephonyManager.CALL_STATE_IDLE) {
+            ServiceBridge.instance.resetCallerType()
+        }
         if (CallMonitorPolicy.shouldHideOverlay(state)) {
             val overlayIntent = Intent(this, OverlayBubbleService::class.java)
             stopService(overlayIntent)

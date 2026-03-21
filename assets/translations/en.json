@@ -124,7 +124,9 @@
   },
   "call_history": {
     "detected": "Detected: {}",
-    "no_abnormal": "No abnormal signs detected"
+    "no_abnormal": "No abnormal signs detected",
+    "not_analyzed": "Not analyzed",
+    "unknown_number": "Unknown number"
   },
   "notification": {
     "analyzing": "Analyzing content...",
