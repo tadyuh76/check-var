@@ -286,7 +286,8 @@ class ServiceBridge private constructor() {
                 callDetectionEnabled && isCallActive -> {
                     Log.d(TAG, "SHAKE CALLBACK → emitting CALL shake")
                     emitShake("call")
-                    bringAppToForeground()
+                    // Do NOT call bringAppToForeground() — user stays on call screen.
+                    // The overlay bubble is already visible; Dart side starts analysis in background.
                 }
                 newsDetectionEnabled -> {
                     Log.d(TAG, "SHAKE CALLBACK → emitting NEWS shake")

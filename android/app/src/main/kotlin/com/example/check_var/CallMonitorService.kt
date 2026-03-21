@@ -79,6 +79,12 @@ class CallMonitorService : Service() {
         val event = EventPayloadBuilder.buildCallActiveEvent(isActive)
         onCallStateChanged?.invoke(event)
 
+        // Show standby overlay as soon as call is active.
+        if (isActive) {
+            val overlayIntent = Intent(this, OverlayBubbleService::class.java)
+            startService(overlayIntent)
+        }
+
         if (CallMonitorPolicy.shouldHideOverlay(state)) {
             val overlayIntent = Intent(this, OverlayBubbleService::class.java)
             stopService(overlayIntent)
