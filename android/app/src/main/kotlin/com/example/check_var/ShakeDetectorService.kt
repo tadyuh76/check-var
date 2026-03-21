@@ -1,5 +1,6 @@
 package com.example.check_var
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -36,7 +37,6 @@ class ShakeDetectorService : Service(), SensorEventListener {
 
     private var sensorManager: SensorManager? = null
     private var accelerometer: Sensor? = null
-    private var wakeLock: PowerManager.WakeLock? = null
     private var lastShakeTime = 0L
     private var shakeCount = 0
     private var lastDetectionTime = 0L
@@ -45,13 +45,6 @@ class ShakeDetectorService : Service(), SensorEventListener {
         super.onCreate()
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
-
-        // Acquire partial wake lock to keep sensor alive when screen is off
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "CheckVar::ShakeDetector"
-        ).apply { acquire() }
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -64,10 +57,6 @@ class ShakeDetectorService : Service(), SensorEventListener {
 
     override fun onDestroy() {
         sensorManager?.unregisterListener(this)
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-        }
-        wakeLock = null
         Log.d(TAG, "Service destroyed")
         super.onDestroy()
     }
@@ -100,6 +89,11 @@ class ShakeDetectorService : Service(), SensorEventListener {
                     shakeCount = 0
                     lastDetectionTime = now
 
+                    if (!shouldHandleShake()) {
+                        Log.d(TAG, "Ignoring shake: screen off, locked, or app in foreground")
+                        return
+                    }
+
                     // If the scam-call layer set a callback, use it;
                     // otherwise fall through to the news-check path.
                     val callback = onShakeDetected
@@ -117,6 +111,30 @@ class ShakeDetectorService : Service(), SensorEventListener {
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+
+    /** Only handle shake when screen is on, unlocked, and app is NOT in foreground */
+    private fun shouldHandleShake(): Boolean {
+        // Screen must be on
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isInteractive) return false
+
+        // Device must be unlocked
+        val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        if (km.isKeyguardLocked) return false
+
+        // App must NOT be in foreground (user should be in another app)
+        if (isAppInForeground()) return false
+
+        return true
+    }
+
+    private fun isAppInForeground(): Boolean {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        val tasks = am.getRunningTasks(1)
+        if (tasks.isNullOrEmpty()) return false
+        val topActivity = tasks[0].topActivity ?: return false
+        return topActivity.packageName == packageName
+    }
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(

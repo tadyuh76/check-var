@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'app_shell.dart';
 import 'theme/app_theme.dart';
 import 'providers/theme_provider.dart';
@@ -12,10 +13,20 @@ import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await EasyLocalization.ensureInitialized();
   await Hive.initFlutter();
   await HistoryService.instance.init();
   await NotificationService.init();
-  runApp(const CheckVarApp());
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [Locale('vi'), Locale('en')],
+      path: 'assets/translations',
+      fallbackLocale: const Locale('vi'),
+      startLocale: const Locale('vi'),
+      useOnlyLangCode: true,
+      child: const CheckVarApp(),
+    ),
+  );
 }
 
 class CheckVarApp extends StatelessWidget {
@@ -38,6 +49,9 @@ class CheckVarApp extends StatelessWidget {
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: themeProvider.themeMode,
+            localizationsDelegates: context.localizationDelegates,
+            supportedLocales: context.supportedLocales,
+            locale: context.locale,
             home: const AppShell(),
           );
         },

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../models/check_result.dart';
 import '../models/call_result.dart';
 import '../models/history_entry.dart';
@@ -44,13 +45,13 @@ class _HistoryScreenState extends State<HistoryScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lịch sử'),
+        title: Text('history.title'.tr()),
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Tin tức'),
-            Tab(text: 'Cuộc gọi'),
+          tabs: [
+            Tab(text: 'history.news'.tr()),
+            Tab(text: 'history.calls'.tr()),
           ],
         ),
       ),
@@ -79,7 +80,7 @@ class _HistoryScreenState extends State<HistoryScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            'Chưa có lịch sử kiểm tra',
+            'history.no_history'.tr(),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -109,9 +110,9 @@ class _HistoryScreenState extends State<HistoryScreen>
 
   Widget _buildNewsCard(HistoryEntry entry) {
     final (color, label) = switch (entry.verdict) {
-      Verdict.real => (AppTheme.success, 'Tin thật'),
-      Verdict.fake => (AppTheme.danger, 'Tin giả'),
-      Verdict.uncertain => (AppTheme.warning, 'Chưa rõ'),
+      Verdict.real => (AppTheme.success, 'verdict.real'.tr()),
+      Verdict.fake => (AppTheme.danger, 'verdict.fake'.tr()),
+      Verdict.uncertain => (AppTheme.warning, 'verdict.uncertain'.tr()),
     };
     final time = _formatTime(entry.timestamp);
 
@@ -175,14 +176,14 @@ class _HistoryScreenState extends State<HistoryScreen>
 
   Widget _buildCallCard(HistoryEntry entry) {
     final (color, label) = switch (entry.threatLevel) {
-      ThreatLevel.safe => (AppTheme.success, 'An toàn'),
-      ThreatLevel.suspicious => (AppTheme.warning, 'Đáng ngờ'),
-      ThreatLevel.scam => (AppTheme.danger, 'Lừa đảo'),
+      ThreatLevel.safe => (AppTheme.success, 'threat.safe'.tr()),
+      ThreatLevel.suspicious => (AppTheme.warning, 'threat.suspicious'.tr()),
+      ThreatLevel.scam => (AppTheme.danger, 'threat.scam'.tr()),
     };
     final time = _formatTime(entry.timestamp);
     final patternsText = entry.patterns.isNotEmpty
-        ? 'Phát hiện: ${entry.patterns.join(', ')}'
-        : 'Không phát hiện dấu hiệu bất thường';
+        ? 'call_history.detected'.tr(args: [entry.patterns.join(', ')])
+        : 'call_history.no_abnormal'.tr();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -245,9 +246,13 @@ class _HistoryScreenState extends State<HistoryScreen>
   String _formatTime(DateTime dt) {
     final now = DateTime.now();
     final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'Vừa xong';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} phút trước';
-    if (diff.inHours < 24) return '${diff.inHours} giờ trước';
+    if (diff.inMinutes < 1) return 'history.just_now'.tr();
+    if (diff.inMinutes < 60) {
+      return 'history.minutes_ago'.tr(args: [diff.inMinutes.toString()]);
+    }
+    if (diff.inHours < 24) {
+      return 'history.hours_ago'.tr(args: [diff.inHours.toString()]);
+    }
     return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} ${dt.day}/${dt.month.toString().padLeft(2, '0')}';
   }
 }

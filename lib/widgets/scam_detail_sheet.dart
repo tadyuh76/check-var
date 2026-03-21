@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../models/scam_alert.dart';
 
-/// Elder-friendly bottom sheet showing scam analysis details in Vietnamese.
+/// Elder-friendly bottom sheet showing scam analysis details.
 class ScamDetailSheet extends StatelessWidget {
   const ScamDetailSheet({
     super.key,
@@ -47,20 +48,20 @@ class ScamDetailSheet extends StatelessWidget {
       ThreatLevel.safe => (
         Colors.green,
         Icons.verified_user_rounded,
-        'An toàn',
-        'Không phát hiện dấu hiệu lừa đảo.',
+        'threat.safe'.tr(),
+        'scam_detail.safe_desc'.tr(),
       ),
       ThreatLevel.suspicious => (
         Colors.amber,
         Icons.warning_rounded,
-        'Đáng ngờ',
-        'Có một số dấu hiệu đáng ngờ. Hãy cẩn thận.',
+        'threat.suspicious'.tr(),
+        'scam_detail.suspicious_desc'.tr(),
       ),
       ThreatLevel.scam => (
         Colors.red,
         Icons.gpp_bad_rounded,
-        'Lừa đảo',
-        'Phát hiện dấu hiệu lừa đảo rõ ràng!',
+        'threat.scam'.tr(),
+        'scam_detail.scam_desc'.tr(),
       ),
     };
 
@@ -132,7 +133,7 @@ class ScamDetailSheet extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  child: const Text('Đã hiểu'),
+                  child: Text('scam_detail.understood'.tr()),
                 ),
               ),
             ],
@@ -180,7 +181,7 @@ class ScamDetailSheet extends StatelessWidget {
     return Column(
       children: [
         Text(
-          'Độ tin cậy',
+          'confidence.label'.tr(),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Colors.white70,
             fontSize: 15,
@@ -217,7 +218,7 @@ class ScamDetailSheet extends StatelessWidget {
     return Column(
       children: [
         Text(
-          'Loại lừa đảo phát hiện',
+          'scam_detail.scam_types'.tr(),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: Colors.white70,
             fontSize: 15,
@@ -274,7 +275,7 @@ class ScamDetailSheet extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Lời khuyên',
+                  'scam_detail.advice'.tr(),
                   style: TextStyle(
                     color: color,
                     fontWeight: FontWeight.bold,

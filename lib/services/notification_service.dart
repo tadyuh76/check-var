@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../models/check_result.dart';
 
 class NotificationService {
@@ -29,12 +30,12 @@ class NotificationService {
       await _plugin.show(
         _analyzingId,
         'CheckVar',
-        'Dang phan tich noi dung...',
-        const NotificationDetails(
+        'notification.analyzing'.tr(),
+        NotificationDetails(
           android: AndroidNotificationDetails(
             'checkvar_analyzing',
-            'Trang thai phan tich',
-            channelDescription: 'Trang thai phan tich',
+            'notification.channel_status'.tr(),
+            channelDescription: 'notification.channel_status'.tr(),
             importance: Importance.high,
             priority: Priority.high,
             ongoing: true,
@@ -56,9 +57,9 @@ class NotificationService {
   static Future<void> showResult(CheckResult result) async {
     await cancelAnalyzing();
     final verdictText = switch (result.verdict) {
-      Verdict.real => 'Tin that',
-      Verdict.fake => 'Tin gia',
-      Verdict.uncertain => 'Chua ro',
+      Verdict.real => 'notification.real'.tr(),
+      Verdict.fake => 'notification.fake'.tr(),
+      Verdict.uncertain => 'notification.uncertain'.tr(),
     };
 
     final confidence = (result.confidence * 100).round();
@@ -67,11 +68,11 @@ class NotificationService {
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       'CheckVar: $verdictText ($confidence%)',
       result.summary,
-      const NotificationDetails(
+      NotificationDetails(
         android: AndroidNotificationDetails(
           'checkvar_results',
-          'Ket qua kiem tra',
-          channelDescription: 'Thong bao ket qua kiem tra tin tuc',
+          'notification.channel_results'.tr(),
+          channelDescription: 'notification.channel_desc'.tr(),
           importance: Importance.high,
           priority: Priority.high,
         ),

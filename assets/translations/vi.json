@@ -1,0 +1,137 @@
+{
+  "nav": {
+    "history": "Lịch sử",
+    "home": "Trang chủ",
+    "settings": "Cài đặt"
+  },
+  "settings": {
+    "title": "Cài đặt",
+    "interface": "Giao diện",
+    "dark_mode": "Chế độ tối",
+    "language": "Ngôn ngữ",
+    "data": "Dữ liệu",
+    "clear_history": "Xóa lịch sử",
+    "clear_history_confirm": "Bạn có chắc muốn xóa toàn bộ lịch sử kiểm tra?",
+    "cancel": "Hủy",
+    "delete": "Xóa",
+    "history_cleared": "Đã xóa lịch sử",
+    "info": "Thông tin",
+    "version": "Phiên bản"
+  },
+  "home": {
+    "check_fake_news": "Kiểm tra\ntin giả",
+    "check_fake_news_title": "Kiểm tra tin giả",
+    "check_fake_news_desc": "Khi bật, hãy mở app tin tức bất kỳ và lắc điện thoại 2 lần. CheckVar sẽ tự động chụp màn hình, trích xuất nội dung, tìm kiếm nguồn xác minh và phân tích độ tin cậy bằng AI.",
+    "detect_scam": "Phát hiện\nlừa đảo",
+    "detect_scam_title": "Phát hiện lừa đảo",
+    "detect_scam_desc": "Khi bật, CheckVar sẽ theo dõi cuộc gọi đến và phân tích nội dung cuộc trò chuyện theo thời gian thực. Nếu phát hiện dấu hiệu lừa đảo (giả danh, áp lực chuyển tiền...), ứng dụng sẽ cảnh báo ngay lập tức.",
+    "enabled": "Đang bật",
+    "disabled": "Tắt",
+    "shake_to_check": "Lắc điện thoại 2 lần để kiểm tra",
+    "need_accessibility": "Cần quyền Accessibility",
+    "accessibility_desc": "CheckVar cần quyền Accessibility Service để chụp màn hình khi bạn lắc điện thoại.\n\nVui lòng tìm và bật \"CheckVar\" trong cài đặt Accessibility.",
+    "later": "Để sau",
+    "open_settings": "Mở cài đặt",
+    "need_overlay": "Cần quyền hiển thị trên ứng dụng khác",
+    "overlay_desc": "CheckVar cần quyền này để hiện hiệu ứng khi lắc điện thoại.\n\nVui lòng bật \"Hiển thị trên ứng dụng khác\" cho CheckVar.",
+    "enable_accessibility": "Bật Accessibility Service",
+    "accessibility_caption_desc": "CheckVar cần quyền Accessibility để đọc phụ đề từ Live Caption.\n\nVui lòng tìm và bật \"CheckVar\" trong cài đặt Accessibility.",
+    "accessibility_not_enabled": "Accessibility Service chưa được bật.",
+    "enable_live_caption": "Bật Live Caption",
+    "live_caption_desc": "Live Caption cần được bật để phụ đề cuộc gọi hiển thị.\n\nMở Cài đặt và tìm \"Live Caption\" trong thanh tìm kiếm, sau đó bật lên.",
+    "already_enabled": "Đã bật"
+  },
+  "history": {
+    "title": "Lịch sử",
+    "news": "Tin tức",
+    "calls": "Cuộc gọi",
+    "no_history": "Chưa có lịch sử kiểm tra",
+    "just_now": "Vừa xong",
+    "minutes_ago": "{} phút trước",
+    "hours_ago": "{} giờ trước"
+  },
+  "verdict": {
+    "real": "Tin thật",
+    "fake": "Tin giả",
+    "uncertain": "Chưa rõ",
+    "uncertain_full": "Chưa xác định"
+  },
+  "threat": {
+    "safe": "An toàn",
+    "suspicious": "Đáng ngờ",
+    "scam": "Lừa đảo",
+    "safe_upper": "AN TOÀN",
+    "suspicious_upper": "ĐÁNG NGỜ",
+    "scam_upper": "LỪA ĐẢO"
+  },
+  "confidence": {
+    "very_sure": "Rất chắc chắn",
+    "quite_sure": "Khá chắc chắn",
+    "unclear": "Chưa rõ ràng",
+    "not_sure": "Không chắc chắn",
+    "very_unsure": "Rất không chắc chắn",
+    "label": "Độ tin cậy",
+    "level": "Độ tin cậy: {}%"
+  },
+  "news_check": {
+    "result_title": "Kết quả kiểm tra",
+    "no_data": "Không có dữ liệu",
+    "extracting": "Đang trích xuất nội dung...",
+    "creating_query": "Đang tạo câu hỏi tìm kiếm...",
+    "searching": "Đang tìm kiếm nguồn...",
+    "analyzing": "Đang phân tích độ tin cậy...",
+    "preparing": "Đang chuẩn bị...",
+    "error_occurred": "Đã xảy ra lỗi",
+    "go_back": "Quay lại",
+    "check_again": "Kiểm tra lại",
+    "close": "Đóng",
+    "extracted_content": "Nội dung trích xuất",
+    "reference_sources": "Nguồn tham khảo"
+  },
+  "detail": {
+    "check_detail": "Chi tiết kiểm tra",
+    "call_detail": "Chi tiết cuộc gọi",
+    "call_content": "Nội dung cuộc gọi",
+    "duration": "Thời gian: {}"
+  },
+  "scam_call": {
+    "title": "Phát hiện lừa đảo",
+    "stop": "Dừng",
+    "listening": "Đang lắng nghe...",
+    "stop_listening": "Dừng nghe",
+    "start_listening": "Bắt đầu nghe",
+    "waiting_captions": "Đang chờ phụ đề...",
+    "connecting_live_caption": "Đang kết nối Live Caption...",
+    "tap_details": "Nhấn để xem chi tiết",
+    "status": "Trạng thái"
+  },
+  "scam_detail": {
+    "safe_desc": "Không phát hiện dấu hiệu lừa đảo.",
+    "suspicious_desc": "Có một số dấu hiệu đáng ngờ. Hãy cẩn thận.",
+    "scam_desc": "Phát hiện dấu hiệu lừa đảo rõ ràng!",
+    "scam_types": "Loại lừa đảo phát hiện",
+    "advice": "Lời khuyên",
+    "understood": "Đã hiểu"
+  },
+  "session_status": {
+    "idle": "Chờ",
+    "connecting": "Đang kết nối",
+    "listening": "Đang nghe",
+    "reconnecting": "Đang kết nối lại",
+    "analyzing": "Đang phân tích",
+    "error": "Lỗi"
+  },
+  "call_history": {
+    "detected": "Phát hiện: {}",
+    "no_abnormal": "Không phát hiện dấu hiệu bất thường"
+  },
+  "notification": {
+    "analyzing": "Đang phân tích nội dung...",
+    "channel_status": "Trạng thái phân tích",
+    "real": "Tin thật",
+    "fake": "Tin giả",
+    "uncertain": "Chưa rõ",
+    "channel_results": "Kết quả kiểm tra",
+    "channel_desc": "Thông báo kết quả kiểm tra tin tức"
+  }
+}

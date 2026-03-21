@@ -1,0 +1,137 @@
+{
+  "nav": {
+    "history": "History",
+    "home": "Home",
+    "settings": "Settings"
+  },
+  "settings": {
+    "title": "Settings",
+    "interface": "Interface",
+    "dark_mode": "Dark mode",
+    "language": "Language",
+    "data": "Data",
+    "clear_history": "Clear history",
+    "clear_history_confirm": "Are you sure you want to delete all check history?",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "history_cleared": "History cleared",
+    "info": "Information",
+    "version": "Version"
+  },
+  "home": {
+    "check_fake_news": "Check\nfake news",
+    "check_fake_news_title": "Check fake news",
+    "check_fake_news_desc": "When enabled, open any news app and shake your phone twice. CheckVar will automatically take a screenshot, extract the content, search for verification sources, and analyze credibility using AI.",
+    "detect_scam": "Detect\nscam calls",
+    "detect_scam_title": "Detect scam calls",
+    "detect_scam_desc": "When enabled, CheckVar will monitor incoming calls and analyze conversation content in real time. If scam indicators are detected (impersonation, pressure to transfer money...), the app will alert you immediately.",
+    "enabled": "On",
+    "disabled": "Off",
+    "shake_to_check": "Shake your phone twice to check",
+    "need_accessibility": "Accessibility permission needed",
+    "accessibility_desc": "CheckVar needs the Accessibility Service permission to take screenshots when you shake your phone.\n\nPlease find and enable \"CheckVar\" in Accessibility settings.",
+    "later": "Later",
+    "open_settings": "Open settings",
+    "need_overlay": "Display over other apps permission needed",
+    "overlay_desc": "CheckVar needs this permission to show visual effects when you shake your phone.\n\nPlease enable \"Display over other apps\" for CheckVar.",
+    "enable_accessibility": "Enable Accessibility Service",
+    "accessibility_caption_desc": "CheckVar needs Accessibility permission to read captions from Live Caption.\n\nPlease find and enable \"CheckVar\" in Accessibility settings.",
+    "accessibility_not_enabled": "Accessibility Service is not enabled.",
+    "enable_live_caption": "Enable Live Caption",
+    "live_caption_desc": "Live Caption needs to be enabled to display call captions.\n\nOpen Settings and search for \"Live Caption\", then turn it on.",
+    "already_enabled": "Enabled"
+  },
+  "history": {
+    "title": "History",
+    "news": "News",
+    "calls": "Calls",
+    "no_history": "No check history yet",
+    "just_now": "Just now",
+    "minutes_ago": "{} min ago",
+    "hours_ago": "{} hr ago"
+  },
+  "verdict": {
+    "real": "Real news",
+    "fake": "Fake news",
+    "uncertain": "Unclear",
+    "uncertain_full": "Uncertain"
+  },
+  "threat": {
+    "safe": "Safe",
+    "suspicious": "Suspicious",
+    "scam": "Scam",
+    "safe_upper": "SAFE",
+    "suspicious_upper": "SUSPICIOUS",
+    "scam_upper": "SCAM"
+  },
+  "confidence": {
+    "very_sure": "Very confident",
+    "quite_sure": "Fairly confident",
+    "unclear": "Unclear",
+    "not_sure": "Not confident",
+    "very_unsure": "Very uncertain",
+    "label": "Confidence",
+    "level": "Confidence: {}%"
+  },
+  "news_check": {
+    "result_title": "Check result",
+    "no_data": "No data",
+    "extracting": "Extracting content...",
+    "creating_query": "Creating search query...",
+    "searching": "Searching sources...",
+    "analyzing": "Analyzing credibility...",
+    "preparing": "Preparing...",
+    "error_occurred": "An error occurred",
+    "go_back": "Go back",
+    "check_again": "Check again",
+    "close": "Close",
+    "extracted_content": "Extracted content",
+    "reference_sources": "Reference sources"
+  },
+  "detail": {
+    "check_detail": "Check details",
+    "call_detail": "Call details",
+    "call_content": "Call content",
+    "duration": "Duration: {}"
+  },
+  "scam_call": {
+    "title": "Scam detection",
+    "stop": "Stop",
+    "listening": "Listening...",
+    "stop_listening": "Stop listening",
+    "start_listening": "Start listening",
+    "waiting_captions": "Waiting for captions...",
+    "connecting_live_caption": "Connecting to Live Caption...",
+    "tap_details": "Tap to see details",
+    "status": "Status"
+  },
+  "scam_detail": {
+    "safe_desc": "No scam indicators detected.",
+    "suspicious_desc": "Some suspicious indicators found. Be careful.",
+    "scam_desc": "Clear scam indicators detected!",
+    "scam_types": "Scam types detected",
+    "advice": "Advice",
+    "understood": "Got it"
+  },
+  "session_status": {
+    "idle": "Idle",
+    "connecting": "Connecting",
+    "listening": "Listening",
+    "reconnecting": "Reconnecting",
+    "analyzing": "Analyzing",
+    "error": "Error"
+  },
+  "call_history": {
+    "detected": "Detected: {}",
+    "no_abnormal": "No abnormal signs detected"
+  },
+  "notification": {
+    "analyzing": "Analyzing content...",
+    "channel_status": "Analysis status",
+    "real": "Real news",
+    "fake": "Fake news",
+    "uncertain": "Unclear",
+    "channel_results": "Check results",
+    "channel_desc": "News check result notifications"
+  }
+}

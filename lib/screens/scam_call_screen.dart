@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../controllers/scam_call_controller.dart';
 import '../models/call_result.dart';
 import '../theme/app_theme.dart';
@@ -45,7 +46,7 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Phát hiện lừa đảo'),
+        title: Text('scam_call.title'.tr()),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close),
@@ -88,10 +89,10 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    child: const Text(
-                      'Dừng',
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    child: Text(
+                      'scam_call.stop'.tr(),
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
@@ -107,11 +108,11 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
       BuildContext context, ScamCallController controller) {
     final (color, icon, label) = switch (controller.currentThreat) {
       ThreatLevel.safe =>
-        (AppTheme.success, Icons.verified_user_rounded, 'AN TOÀN'),
+        (AppTheme.success, Icons.verified_user_rounded, 'threat.safe_upper'.tr()),
       ThreatLevel.suspicious =>
-        (AppTheme.warning, Icons.shield_rounded, 'ĐÁNG NGỜ'),
+        (AppTheme.warning, Icons.shield_rounded, 'threat.suspicious_upper'.tr()),
       ThreatLevel.scam =>
-        (AppTheme.danger, Icons.gpp_bad_rounded, 'LỪA ĐẢO'),
+        (AppTheme.danger, Icons.gpp_bad_rounded, 'threat.scam_upper'.tr()),
     };
     final confidence = (controller.confidence * 100).round();
 
@@ -136,7 +137,7 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Độ tin cậy: $confidence%',
+            'confidence.level'.tr(args: [confidence.toString()]),
             style:
                 Theme.of(context).textTheme.bodyMedium?.copyWith(color: color),
           ),
@@ -167,7 +168,7 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
     if (controller.transcript.isEmpty) {
       return Center(
         child: Text(
-          'Đang lắng nghe...',
+          'scam_call.listening'.tr(),
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),

@@ -45,8 +45,10 @@ class PlatformChannel {
   }
 
   // Analysis overlay (system overlay on top of other apps)
-  static Future<void> showAnalysisOverlay() async {
-    await _methods.invokeMethod('showAnalysisOverlay');
+  static Future<void> showAnalysisOverlay({String? initialStatus}) async {
+    await _methods.invokeMethod('showAnalysisOverlay', {
+      'initialStatus': initialStatus ?? '',
+    });
   }
 
   static Future<void> hideAnalysisOverlay() async {
@@ -59,18 +61,30 @@ class PlatformChannel {
 
   static Future<void> showAnalysisResult({
     required String verdict,
+    required String verdictLabel,
     required String confidence,
     required String summary,
+    required String closeLabel,
   }) async {
     await _methods.invokeMethod('showAnalysisResult', {
       'verdict': verdict,
+      'verdictLabel': verdictLabel,
       'confidence': confidence,
       'summary': summary,
+      'closeLabel': closeLabel,
     });
   }
 
-  static Future<void> showAnalysisError(String message) async {
-    await _methods.invokeMethod('showAnalysisError', {'message': message});
+  static Future<void> showAnalysisError(
+    String message, {
+    String errorLabel = 'Error',
+    String closeLabel = 'Close',
+  }) async {
+    await _methods.invokeMethod('showAnalysisError', {
+      'message': message,
+      'errorLabel': errorLabel,
+      'closeLabel': closeLabel,
+    });
   }
 
   static Stream<dynamic> get eventStream => _events.receiveBroadcastStream();
