@@ -6,6 +6,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -329,9 +330,9 @@ class ServiceBridge private constructor() {
                     // The overlay bubble is already visible; Dart side starts analysis in background.
                 }
                 newsDetectionEnabled -> {
-                    Log.d(TAG, "SHAKE CALLBACK → emitting NEWS shake")
-                    emitShake("news")
-                    bringAppToForeground()
+                    Log.d(TAG, "SHAKE CALLBACK → routing to onShakeDetected (OCR)")
+                    acquireTransientWakeLock()
+                    onShakeDetected()
                 }
                 else -> {
                     Log.d(TAG, "SHAKE CALLBACK → NO BRANCH MATCHED, shake ignored")
@@ -449,6 +450,22 @@ class ServiceBridge private constructor() {
         previousSpeakerphoneState = null
         previousAudioMode = null
         speakerRoutingActive = false
+    }
+
+    /**
+     * Acquire a short-lived partial wake lock to prevent doze/battery
+     * optimization from throttling the network while Flutter runs the
+     * fact-check API call.  Auto-releases after 90 seconds.
+     */
+    private fun acquireTransientWakeLock() {
+        try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "checkvar:factcheck")
+            wl.acquire(90_000)
+            Log.d(TAG, "acquireTransientWakeLock: acquired for 90s")
+        } catch (e: Exception) {
+            Log.w(TAG, "acquireTransientWakeLock: failed", e)
+        }
     }
 
     private fun bringAppToForeground() {

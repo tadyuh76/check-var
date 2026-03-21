@@ -84,6 +84,15 @@ class _AppShellState extends State<AppShell> {
       case 'overlay_activate':
         debugPrint('AppShell: overlay_activate received');
         _handleOverlayActivate();
+      case 'open_detail':
+        final controller = NewsCheckController.instance;
+        final result = controller.result;
+        if (result != null) {
+          final entry = HistoryEntry.fromCheckResult(result);
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => HistoryDetailScreen(entry: entry)),
+          );
+        }
       default:
         break;
     }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_keys.dart';
 import '../models/check_result.dart';
@@ -84,6 +85,8 @@ String cleanOcrText(String text) {
 ///
 /// Returns a [CheckResult] with verdict, confidence, summary, and sources.
 Future<CheckResult> factCheck(String cleanedText) async {
+  debugPrint('factCheck: sending ${cleanedText.length} chars to API');
+  debugPrint('factCheck: text preview: ${cleanedText.substring(0, cleanedText.length.clamp(0, 200))}');
   try {
     final response = await http
         .post(
@@ -93,7 +96,11 @@ Future<CheckResult> factCheck(String cleanedText) async {
         )
         .timeout(const Duration(seconds: 60));
 
+    debugPrint('factCheck: HTTP ${response.statusCode}, body length=${response.body.length}');
+    debugPrint('factCheck: response preview: ${response.body.substring(0, response.body.length.clamp(0, 300))}');
+
     if (response.statusCode != 200) {
+      debugPrint('factCheck: ERROR — non-200 status code');
       return CheckResult(
         verdict: Verdict.uncertain,
         confidence: 0.0,
@@ -116,6 +123,7 @@ Future<CheckResult> factCheck(String cleanedText) async {
 
     final verdictStr =
         (data['verdict'] as String? ?? 'uncertain').toLowerCase();
+    debugPrint('factCheck: verdictStr=$verdictStr');
 
     // "not_news" → treat as uncertain with 0 confidence (no fact-check ran)
     final verdict = switch (verdictStr) {
@@ -141,7 +149,9 @@ Future<CheckResult> factCheck(String cleanedText) async {
       summary: summary,
       sources: sources,
     );
-  } catch (e) {
+  } catch (e, st) {
+    debugPrint('factCheck: EXCEPTION — $e');
+    debugPrint('factCheck: stacktrace — $st');
     return CheckResult(
       verdict: Verdict.uncertain,
       confidence: 0.0,
