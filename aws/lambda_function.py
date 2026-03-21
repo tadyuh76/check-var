@@ -117,7 +117,7 @@ TRUSTED_DOMAINS = {
 
     # ── Vietnam: Tier 3 (reputable) ──
     "vneconomy.vn": 3, "cafef.vn": 3, "genk.vn": 3,
-    "kenh14.vn": 3, "soha.vn": 3, "vietcetera.com": 3,
+    "soha.vn": 3, "vietcetera.com": 3,
     "plo.vn": 3, "anninhthudo.vn": 3, "hanoimoi.vn": 3,
     "hcmcpv.org.vn": 3, "congan.com.vn": 3, "kinhtedothi.vn": 3,
     "phapluatplus.vn": 3, "baogiaothong.vn": 3, "danviet.vn": 3,
