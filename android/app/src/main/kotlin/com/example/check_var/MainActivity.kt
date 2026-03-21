@@ -25,6 +25,7 @@ class MainActivity : FlutterActivity() {
 
         var instance: MainActivity? = null
         var pendingScreenText: String? = null
+        var isInForeground = false
     }
 
     private var pendingPermissionsResult: MethodChannel.Result? = null
@@ -181,8 +182,19 @@ class MainActivity : FlutterActivity() {
 
     // ── Lifecycle ───────────────────────────────────────────────────────────
 
+    override fun onResume() {
+        super.onResume()
+        isInForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isInForeground = false
+    }
+
     override fun onDestroy() {
         instance = null
+        isInForeground = false
         super.onDestroy()
     }
 

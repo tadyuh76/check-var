@@ -88,7 +88,16 @@ Future<CheckResult> factCheck(String cleanedText) async {
       );
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    // Lambda Function URL may return wrapped response with body as JSON string
+    dynamic decoded = jsonDecode(response.body);
+    if (decoded is Map<String, dynamic> && decoded.containsKey('body')) {
+      final body = decoded['body'];
+      decoded = body is String ? jsonDecode(body) : body;
+    }
+    if (decoded is String) {
+      decoded = jsonDecode(decoded);
+    }
+    final data = decoded as Map<String, dynamic>;
 
     final verdictStr =
         (data['verdict'] as String? ?? 'uncertain').toLowerCase();

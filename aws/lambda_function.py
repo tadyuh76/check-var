@@ -3,7 +3,7 @@ import os
 import urllib.request
 import urllib.error
 
-GROQ_API_KEY = os.environ["GROQ_API_KEY"]
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 SERPER_API_KEY = os.environ["SERPER_API_KEY"]
 
 
@@ -15,13 +15,13 @@ def lambda_handler(event, context):
         if not text or len(text) < 20:
             return _response(400, {"error": "Text too short"})
 
-        # Step 1: Extract search query via Groq LLM
+        # Step 1: Extract search query via OpenAI
         query = _extract_search_query(text)
 
         # Step 2: Web search via Serper
         sources = _web_search(query)
 
-        # Step 3: Classify via Groq LLM
+        # Step 3: Classify via OpenAI
         result = _classify_news(text, sources)
 
         return _response(200, result)
@@ -45,7 +45,7 @@ def _extract_search_query(text):
     )
 
     try:
-        data = _groq_chat(
+        content = _openai_chat(
             messages=[
                 {
                     "role": "system",
@@ -60,14 +60,7 @@ def _extract_search_query(text):
             max_tokens=100,
         )
 
-        query = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
-            .strip()
-            .strip("\"'")
-        )
-
+        query = content.strip().strip("\"'")
         if query:
             return query
     except Exception:
@@ -113,7 +106,7 @@ def _web_search(query):
 
 
 # ---------------------------------------------------------------------------
-# 3. Classify news via Groq LLM
+# 3. Classify news via OpenAI
 # ---------------------------------------------------------------------------
 
 def _classify_news(text, sources):
@@ -150,7 +143,7 @@ TODAY'S WEB SEARCH RESULTS:
 {{"verdict":"real|fake|uncertain","confidence":0.0-1.0,"summary":"1-2 sentence Vietnamese explanation based on sources"}}"""
 
     try:
-        data = _groq_chat(
+        content = _openai_chat(
             messages=[
                 {
                     "role": "system",
@@ -161,12 +154,6 @@ TODAY'S WEB SEARCH RESULTS:
             temperature=0.1,
             max_tokens=200,
             json_mode=True,
-        )
-
-        content = (
-            data.get("choices", [{}])[0]
-            .get("message", {})
-            .get("content", "")
         )
 
         parsed = _extract_json(content)
@@ -199,9 +186,10 @@ TODAY'S WEB SEARCH RESULTS:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _groq_chat(messages, temperature=0.0, max_tokens=100, json_mode=False):
+def _openai_chat(messages, temperature=0.0, max_tokens=100, json_mode=False):
+    """Call OpenAI API (gpt-4o-mini — fast, cheap, reliable from AWS)."""
     body = {
-        "model": "llama-3.3-70b-versatile",
+        "model": "gpt-4o-mini",
         "temperature": temperature,
         "max_tokens": max_tokens,
         "messages": messages,
@@ -210,16 +198,22 @@ def _groq_chat(messages, temperature=0.0, max_tokens=100, json_mode=False):
         body["response_format"] = {"type": "json_object"}
 
     req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
+        "https://api.openai.com/v1/chat/completions",
         data=json.dumps(body).encode(),
         headers={
-            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
             "Content-Type": "application/json",
         },
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as resp:
-        return json.loads(resp.read())
+        data = json.loads(resp.read())
+
+    return (
+        data.get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "")
+    )
 
 
 def _extract_json(raw):

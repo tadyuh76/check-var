@@ -114,26 +114,16 @@ class ShakeDetectorService : Service(), SensorEventListener {
 
     /** Only handle shake when screen is on, unlocked, and app is NOT in foreground */
     private fun shouldHandleShake(): Boolean {
-        // Screen must be on
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         if (!pm.isInteractive) return false
 
-        // Device must be unlocked
         val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         if (km.isKeyguardLocked) return false
 
-        // App must NOT be in foreground (user should be in another app)
-        if (isAppInForeground()) return false
+        // Use MainActivity lifecycle flag — getRunningTasks() is broken on Android 10+
+        if (MainActivity.isInForeground) return false
 
         return true
-    }
-
-    private fun isAppInForeground(): Boolean {
-        val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        val tasks = am.getRunningTasks(1)
-        if (tasks.isNullOrEmpty()) return false
-        val topActivity = tasks[0].topActivity ?: return false
-        return topActivity.packageName == packageName
     }
 
     private fun createNotificationChannel() {
