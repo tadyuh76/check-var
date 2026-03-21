@@ -45,9 +45,11 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _handleShake(String mode) async {
+    debugPrint('AppShell._handleShake: mode=$mode, isProcessing=$_isProcessing');
     if (_isProcessing) return;
 
     if (mode == 'call') {
+      debugPrint('AppShell: routing to _handleCallShake');
       await _handleCallShake();
       return;
     }

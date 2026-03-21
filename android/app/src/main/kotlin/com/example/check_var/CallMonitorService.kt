@@ -53,7 +53,13 @@ class CallMonitorService : Service() {
                 }
             }
             telephonyCallback = callback
-            telephonyManager?.registerTelephonyCallback(executor, callback)
+            try {
+                telephonyManager?.registerTelephonyCallback(executor, callback)
+            } catch (e: SecurityException) {
+                // READ_PHONE_STATE not granted — stop gracefully instead of crashing.
+                android.util.Log.w("CallMonitorService", "Missing READ_PHONE_STATE permission", e)
+                stopSelf()
+            }
         }
     }
 
@@ -68,6 +74,7 @@ class CallMonitorService : Service() {
 
     private fun handleCallState(state: Int) {
         val isActive = CallMonitorPolicy.isCallActive(state)
+        android.util.Log.d("CallMonitor", "handleCallState: state=$state, isActive=$isActive")
 
         val event = EventPayloadBuilder.buildCallActiveEvent(isActive)
         onCallStateChanged?.invoke(event)

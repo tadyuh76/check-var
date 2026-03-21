@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import '../../../core/platform_channel.dart';
 import 'scam_call_transcript_gateway.dart';
 import 'live_transcript_models.dart';
@@ -29,12 +31,16 @@ class LiveCaptionTranscriptGateway implements ScamCallTranscriptGateway {
 
     _lastEmittedText = '';
 
+    debugPrint('LiveCaptionGateway: subscribing to shakeEvents');
     _eventSub = PlatformChannel.shakeEvents.listen((event) {
+      debugPrint('LiveCaptionGateway: event received: ${event['type']}');
       final type = event['type'] as String?;
       if (type != 'caption_text') return;
 
       final text = (event['text'] as String?)?.trim() ?? '';
       if (text.isEmpty) return;
+
+      debugPrint('LiveCaptionGateway: caption_text="${text.length > 60 ? text.substring(0, 60) : text}"');
 
       // Dart-side dedup — skip if identical to last emission.
       if (text == _lastEmittedText) return;
@@ -49,6 +55,7 @@ class LiveCaptionTranscriptGateway implements ScamCallTranscriptGateway {
       );
     });
 
+    debugPrint('LiveCaptionGateway: calling startCaptionCapture');
     await PlatformChannel.startCaptionCapture();
     _started = true;
     _transcripts.add(

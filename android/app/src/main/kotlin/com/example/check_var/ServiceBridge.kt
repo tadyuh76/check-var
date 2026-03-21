@@ -201,6 +201,7 @@ class ServiceBridge private constructor() {
     // ── Live Caption capture methods ────────────────────────────────────────
 
     private fun startCaptionCapture() {
+        Log.d(TAG, "startCaptionCapture: setting captionCaptureActive=true, a11y=${CheckVarAccessibilityService.instance != null}")
         captionCaptureActive = true
         CheckVarAccessibilityService.instance?.resetCaptionState()
     }
@@ -248,6 +249,7 @@ class ServiceBridge private constructor() {
 
     /** Called by CheckVarAccessibilityService to emit caption text to Flutter. */
     fun emitCaptionText(text: String) {
+        Log.d(TAG, "emitCaptionText: '${text.take(60)}', eventSink=${eventSink != null}")
         mainHandler.post {
             eventSink?.success(
                 mapOf(
@@ -261,6 +263,7 @@ class ServiceBridge private constructor() {
     // ── Scam-call service orchestration ─────────────────────────────────────
 
     private fun syncServices() {
+        Log.d(TAG, "syncServices: newsDetection=$newsDetectionEnabled, callDetection=$callDetectionEnabled, isCallActive=$isCallActive")
         if (newsDetectionEnabled || callDetectionEnabled) {
             startShakeService()
         } else {
@@ -276,15 +279,22 @@ class ServiceBridge private constructor() {
     }
 
     private fun startShakeService() {
+        Log.d(TAG, "startShakeService: setting onShakeDetected callback")
         ShakeDetectorService.onShakeDetected = {
+            Log.d(TAG, "SHAKE CALLBACK: callDetection=$callDetectionEnabled, isCallActive=$isCallActive, newsDetection=$newsDetectionEnabled, eventSink=${eventSink != null}")
             when {
                 callDetectionEnabled && isCallActive -> {
+                    Log.d(TAG, "SHAKE CALLBACK → emitting CALL shake")
                     emitShake("call")
                     bringAppToForeground()
                 }
                 newsDetectionEnabled -> {
+                    Log.d(TAG, "SHAKE CALLBACK → emitting NEWS shake")
                     emitShake("news")
                     bringAppToForeground()
+                }
+                else -> {
+                    Log.d(TAG, "SHAKE CALLBACK → NO BRANCH MATCHED, shake ignored")
                 }
             }
         }
@@ -299,6 +309,7 @@ class ServiceBridge private constructor() {
     }
 
     private fun emitShake(mode: String) {
+        Log.d(TAG, "emitShake: mode=$mode, eventSink=${eventSink != null}")
         eventSink?.success(
             mapOf(
                 "type" to "shake",

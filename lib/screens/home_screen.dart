@@ -119,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Lắc điện thoại 2 lần để kiểm tra'),
+        content: Text('Lắc điện thoại 3 lần để kiểm tra'),
         duration: Duration(seconds: 3),
       ),
     );
@@ -152,6 +152,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final ready = await _ensureLiveCaptionPermissions();
     if (!ready || !mounted) return;
 
+    // Overlay permission is required to bring the app to foreground
+    // when the user shakes during a call (Android 12+ restriction).
+    final hasOverlay = await PlatformChannel.checkOverlayPermission();
+    if (!hasOverlay) {
+      if (!mounted) return;
+      final shouldOpen = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cần quyền hiển thị trên ứng dụng khác'),
+          content: const Text(
+            'CheckVar cần quyền này để hiện lên khi phát hiện lừa đảo '
+            'trong cuộc gọi.\n\n'
+            'Vui lòng bật "Hiển thị trên ứng dụng khác" cho CheckVar.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Để sau'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Mở cài đặt'),
+            ),
+          ],
+        ),
+      );
+      if (shouldOpen == true) {
+        _waitingForPermission = true;
+        await PlatformChannel.requestOverlayPermission();
+        await _waitForResume();
+        final granted = await PlatformChannel.checkOverlayPermission();
+        if (!granted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Quyền hiển thị trên ứng dụng khác chưa được bật.'),
+              ),
+            );
+          }
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    // READ_PHONE_STATE is required by CallMonitorService to listen for
+    // call state changes. Must be granted before starting the service.
+    final phoneGranted =
+        await core_channel.PlatformChannel.requestPhoneStatePermission();
+    if (!phoneGranted || !mounted) return;
+
     // Enable call detection on the native side — this starts the shake
     // service and call monitor via syncServices().
     await core_channel.PlatformChannel.setCallDetectionEnabled(true);
@@ -160,7 +213,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Lắc điện thoại 2 lần trong cuộc gọi để kiểm tra'),
+          content: Text('Lắc điện thoại 3 lần trong cuộc gọi để kiểm tra'),
           duration: Duration(seconds: 3),
         ),
       );
@@ -383,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 onTap: () => _toggleNewsCheck(homeState.newsCheckEnabled),
                 onInfoTap: () => _showInfoSheet(
                   'Kiểm tra tin giả',
-                  'Khi bật, hãy mở app tin tức bất kỳ và lắc điện thoại 2 lần. '
+                  'Khi bật, hãy mở app tin tức bất kỳ và lắc điện thoại 3 lần. '
                       'CheckVar sẽ tự động chụp màn hình, trích xuất nội dung, '
                       'tìm kiếm nguồn xác minh và phân tích độ tin cậy bằng AI.',
                 ),

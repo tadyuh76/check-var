@@ -19,7 +19,12 @@ class CheckVarAccessibilityService : AccessibilityService() {
     companion object {
         var instance: CheckVarAccessibilityService? = null
         private const val TAG = "CheckVarA11y"
-        private const val LIVE_CAPTION_PACKAGE = "com.google.android.as"
+
+        /** Known Live Caption provider packages across device manufacturers. */
+        private val LIVE_CAPTION_PACKAGES = setOf(
+            "com.google.android.as",           // Google Android System Intelligence (Pixel, most OEMs)
+            "com.google.android.tts",          // Fallback on some devices
+        )
     }
 
     private val executor: Executor = Executors.newSingleThreadExecutor()
@@ -37,16 +42,38 @@ class CheckVarAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
-        if (event.packageName?.toString() != LIVE_CAPTION_PACKAGE) return
+
+        val pkg = event.packageName?.toString() ?: ""
+        if (pkg !in LIVE_CAPTION_PACKAGES) {
+            // Log potentially relevant packages to help discover the correct one.
+            if (pkg.contains("caption", ignoreCase = true) ||
+                pkg.contains("android.as", ignoreCase = true) ||
+                pkg.contains("accessibility", ignoreCase = true)
+            ) {
+                Log.d(TAG, "Event from related pkg=$pkg (not in known Live Caption packages)")
+            }
+            return
+        }
 
         val bridge = ServiceBridge.instance
-        if (!bridge.captionCaptureActive) return
+        if (!bridge.captionCaptureActive) {
+            Log.d(TAG, "captionCaptureActive=false, ignoring Live Caption event from pkg=$pkg")
+            return
+        }
 
-        val source = event.source ?: return
+        val source = event.source
+        if (source == null) {
+            Log.w(TAG, "event.source is null for pkg=$pkg — cannot extract text (missing flagRetrieveInteractiveWindows?)")
+            return
+        }
         val text = extractTextFromNode(source)
         source.recycle()
 
-        if (text.isBlank()) return
+        if (text.isBlank()) {
+            Log.d(TAG, "Extracted text is blank for pkg=$pkg")
+            return
+        }
+        Log.d(TAG, "Caption text extracted: '${text.take(80)}'")
 
         // Word-level deduplication: only emit when new word(s) appear.
         if (text == lastEmittedCaption) return

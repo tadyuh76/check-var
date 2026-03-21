@@ -2,7 +2,6 @@ import 'package:flutter/services.dart';
 
 class PlatformChannel {
   static const _methods = MethodChannel('com.checkvar/methods');
-  static const _events = EventChannel('com.checkvar/events');
 
   static Future<void> startShakeService() async {
     await _methods.invokeMethod('startShakeService');
@@ -43,6 +42,4 @@ class PlatformChannel {
   static Future<void> requestOverlayPermission() async {
     await _methods.invokeMethod('requestOverlayPermission');
   }
-
-  static Stream<dynamic> get eventStream => _events.receiveBroadcastStream();
 }
