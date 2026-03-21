@@ -85,6 +85,13 @@ class HistoryDetailScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
+              const SizedBox(height: 8),
+              Text(
+                'ai_disclaimer'.tr(),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey,
+                    ),
+              ),
             ],
           ),
         ),

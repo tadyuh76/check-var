@@ -45,8 +45,8 @@ class AnalysisOverlayService : Service() {
             mainHandler.post { instance?.setStatus(statusText) }
         }
 
-        fun showResult(verdict: String, verdictLabel: String, confidence: String, summary: String, detailLabel: String) {
-            mainHandler.post { instance?.setResult(verdict, verdictLabel, confidence, summary, detailLabel) }
+        fun showResult(verdict: String, verdictLabel: String, confidence: String, summary: String, detailLabel: String, disclaimerLabel: String) {
+            mainHandler.post { instance?.setResult(verdict, verdictLabel, confidence, summary, detailLabel, disclaimerLabel) }
         }
 
         fun showError(message: String, errorLabel: String = "Error", closeLabel: String = "Close") {
@@ -266,7 +266,7 @@ class AnalysisOverlayService : Service() {
 
     // ── Result / Error ────────────────────────────────────────────────────
 
-    private fun setResult(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String) {
+    private fun setResult(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String, disclaimerLabel: String) {
         safetyTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         dotAnimator?.cancel()
 
@@ -282,7 +282,7 @@ class AnalysisOverlayService : Service() {
             ?.start()
 
         mainHandler.postDelayed({
-            showResultCard(verdict, vLabel, confidence, summary, detailLabel)
+            showResultCard(verdict, vLabel, confidence, summary, detailLabel, disclaimerLabel)
         }, 200)
 
         autoDismissRunnable = Runnable { dismissWithAnimation() }
@@ -305,7 +305,7 @@ class AnalysisOverlayService : Service() {
             ?.start()
 
         mainHandler.postDelayed({
-            showResultCard("error", errorLabel, "", message, closeLabel)
+            showResultCard("error", errorLabel, "", message, closeLabel, "")
         }, 200)
 
         autoDismissRunnable = Runnable { dismissWithAnimation() }
@@ -314,7 +314,7 @@ class AnalysisOverlayService : Service() {
 
     // ── Result card ──────────────────────────────────────────────────────
 
-    private fun showResultCard(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String) {
+    private fun showResultCard(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String, disclaimerLabel: String) {
         // Scrim — tap to dismiss
         scrimView = View(this).apply {
             setBackgroundColor(Color.parseColor("#55000000"))
@@ -518,6 +518,18 @@ class AnalysisOverlayService : Service() {
             )
         })
         card.addView(scrollView)
+
+        // AI disclaimer
+        card.addView(TextView(this).apply {
+            text = disclaimerLabel
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(Color.parseColor("#9E9E9E"))
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(8); gravity = Gravity.CENTER_HORIZONTAL }
+        })
 
         // "View details" button — opens app
         if (verdict != "error") {
