@@ -1,9 +1,17 @@
 import 'package:flutter/foundation.dart';
-import '../api/jigsawstack_api.dart';
+import '../api/fact_check_api.dart';
 import '../models/check_result.dart';
 import '../models/history_entry.dart';
 import '../services/history_service.dart';
-import '../services/notification_service.dart';
+import '../services/platform_channel.dart';
+
+String _confidenceLabel(double confidence) {
+  if (confidence >= 0.85) return 'Rất chắc chắn';
+  if (confidence >= 0.65) return 'Khá chắc chắn';
+  if (confidence >= 0.45) return 'Chưa rõ ràng';
+  if (confidence >= 0.25) return 'Không chắc chắn';
+  return 'Rất không chắc chắn';
+}
 
 enum NewsCheckStatus { idle, extracting, searching, classifying, done, error }
 
@@ -36,49 +44,47 @@ class NewsCheckController extends ChangeNotifier {
     _errorMessage = '';
 
     try {
-      // Show ongoing notification
-      await NotificationService.showAnalyzing();
+      // Show analysis overlay first, then glow ON TOP
+      await PlatformChannel.showAnalysisOverlay();
+      try { await PlatformChannel.showGlowOverlay(); } catch (_) {}
 
       // Step 1: Clean OCR text
       _setStatus(NewsCheckStatus.extracting);
+      await PlatformChannel.updateAnalysisStatus('Đang trích xuất nội dung...');
       final cleanedText = cleanOcrText(screenText);
 
-      // Step 2: Extract search queries
-      final queries = extractSearchQueries(cleanedText);
+      // Step 2: Extract search query via LLM
+      await PlatformChannel.updateAnalysisStatus('Đang tạo câu hỏi tìm kiếm...');
+      final query = await extractSearchQuery(cleanedText);
 
-      // Step 3: Web search (parallel for all queries)
+      // Step 3: Web search via Serper
       _setStatus(NewsCheckStatus.searching);
-      final searchFutures = queries.map((q) => webSearch(q));
-      final searchResults = await Future.wait(searchFutures);
-
-      // Merge and deduplicate sources
-      final seen = <String>{};
-      final allSources = <SearchSource>[];
-      for (final results in searchResults) {
-        for (final source in results) {
-          if (seen.add(source.url)) {
-            allSources.add(source);
-          }
-        }
-      }
+      await PlatformChannel.updateAnalysisStatus('Đang tìm kiếm nguồn...');
+      final sources = await webSearch(query);
 
       // Step 4: LLM classification
       _setStatus(NewsCheckStatus.classifying);
-      final result = await classifyNews(cleanedText, allSources);
+      await PlatformChannel.updateAnalysisStatus('Đang phân tích độ tin cậy...');
+      final result = await classifyNews(cleanedText, sources);
 
       _result = result;
       _setStatus(NewsCheckStatus.done);
+
+      // Show result on native overlay
+      await PlatformChannel.showAnalysisResult(
+        verdict: result.verdict.name,
+        confidence: _confidenceLabel(result.confidence),
+        summary: result.summary,
+      );
 
       // Save to history
       final entry = HistoryEntry.fromCheckResult(result);
       await HistoryService.instance.save(entry);
 
-      // Show notification
-      await NotificationService.showResult(result);
     } catch (e) {
-      await NotificationService.cancelAnalyzing();
       _errorMessage = e.toString();
       _setStatus(NewsCheckStatus.error);
+      await PlatformChannel.showAnalysisError(_errorMessage);
     }
   }
 

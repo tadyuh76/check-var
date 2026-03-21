@@ -9,7 +9,6 @@ import 'services/shake_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/settings_screen.dart';
-import 'screens/news_check_screen.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -22,7 +21,6 @@ class _AppShellState extends State<AppShell> {
   int _currentIndex = 1; // Default to Home (middle tab)
   StreamSubscription<String>? _shakeSub;
   bool _isProcessing = false;
-  bool _hasNavigatedToResult = false;
 
   final _screens = const [
     HistoryScreen(),
@@ -53,14 +51,9 @@ class _AppShellState extends State<AppShell> {
     if (!homeState.newsCheckEnabled) return;
 
     _isProcessing = true;
-    _hasNavigatedToResult = false;
 
     try {
       HapticFeedback.heavyImpact();
-
-      try {
-        await PlatformChannel.showGlowOverlay();
-      } catch (_) {}
 
       // Poll for OCR result — screenshot + ML Kit can take 1-5 seconds
       String? screenText;
@@ -73,13 +66,6 @@ class _AppShellState extends State<AppShell> {
       debugPrint('CheckVar: got screenText length=${screenText?.length ?? 0}');
 
       if (screenText != null && screenText.isNotEmpty) {
-        if (mounted && !_hasNavigatedToResult) {
-          _hasNavigatedToResult = true;
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const NewsCheckScreen()),
-          );
-        }
-
         await controller.runCheckWithText(screenText);
       } else {
         debugPrint('CheckVar: no text from OCR after 5s');

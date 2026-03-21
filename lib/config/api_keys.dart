@@ -5,3 +5,4 @@ const jigsawStackApiKey =
 const geminiApiKey = 'AIzaSyCWiWp6YZ8MNpiDghyIibS-2ri_psq33FU';
 // TODO: Replace with your actual Groq API key
 const groqApiKey = '';
+const serperApiKey = 'f29d05486e152fb7ec8d7b9a8360304e5573d164';

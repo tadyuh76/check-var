@@ -53,6 +53,10 @@
             android:exported="false" />
 
         <service
+            android:name=".AnalysisOverlayService"
+            android:exported="false" />
+
+        <service
             android:name=".ShakeDetectorService"
             android:exported="false"
             android:foregroundServiceType="specialUse" />
