@@ -38,6 +38,10 @@ class ServiceBridge private constructor() {
     private var newsDetectionEnabled: Boolean = false
     private var callDetectionEnabled: Boolean = false
     private var isCallActive: Boolean = false
+
+    /** Cached caller identity from the most recent RINGING event. */
+    var lastCallerType: CallerIdentityResolver.CallerType = CallerIdentityResolver.CallerType.UNDETERMINED
+        private set
     private var tts: TextToSpeech? = null
     private var speakerRoutingActive: Boolean = false
     private var previousSpeakerphoneState: Boolean? = null
@@ -265,6 +269,18 @@ class ServiceBridge private constructor() {
                 )
             )
         }
+    }
+
+    // ── Caller identity cache ────────────────────────────────────────────────
+
+    fun cacheCallerType(type: CallerIdentityResolver.CallerType) {
+        lastCallerType = type
+        Log.d(TAG, "cacheCallerType: $type")
+    }
+
+    fun resetCallerType() {
+        lastCallerType = CallerIdentityResolver.CallerType.UNDETERMINED
+        Log.d(TAG, "resetCallerType: reset to UNDETERMINED")
     }
 
     // ── Scam-call service orchestration ─────────────────────────────────────
