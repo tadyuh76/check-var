@@ -1,5 +1,5 @@
 name: check_var
-description: "A new Flutter project."
+description: "CheckVar - Scam call detection and verification."
 publish_to: 'none'
 version: 0.1.0
 
@@ -31,9 +31,9 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/CheckVar-Logo.png"
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/CheckVar-Logo.png"
+  image_path: "logo.png"
+  adaptive_icon_background: "#0D2B3E"
+  adaptive_icon_foreground: "logo.png"
   remove_alpha_ios: true
 
 flutter:

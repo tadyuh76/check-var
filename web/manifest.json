@@ -1,11 +1,11 @@
 {
-    "name": "check_var",
-    "short_name": "check_var",
+    "name": "CheckVar",
+    "short_name": "CheckVar",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0D2B3E",
+    "theme_color": "#00E5CC",
+    "description": "CheckVar - Scam call detection and verification.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
