@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../models/history_entry.dart';
 import '../models/check_result.dart';
 import '../models/call_result.dart';
 import '../theme/app_theme.dart';
 
 String _confidenceLabel(double confidence) {
-  if (confidence >= 0.85) return 'Rất chắc chắn';
-  if (confidence >= 0.65) return 'Khá chắc chắn';
-  if (confidence >= 0.45) return 'Chưa rõ ràng';
-  if (confidence >= 0.25) return 'Không chắc chắn';
-  return 'Rất không chắc chắn';
+  if (confidence >= 0.85) return 'confidence.very_sure'.tr();
+  if (confidence >= 0.65) return 'confidence.quite_sure'.tr();
+  if (confidence >= 0.45) return 'confidence.unclear'.tr();
+  if (confidence >= 0.25) return 'confidence.not_sure'.tr();
+  return 'confidence.very_unsure'.tr();
 }
 
 class HistoryDetailScreen extends StatelessWidget {
@@ -23,8 +24,8 @@ class HistoryDetailScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(entry.type == HistoryType.news
-            ? 'Chi tiết kiểm tra'
-            : 'Chi tiết cuộc gọi'),
+            ? 'detail.check_detail'.tr()
+            : 'detail.call_detail'.tr()),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -38,10 +39,10 @@ class HistoryDetailScreen extends StatelessWidget {
 
   Widget _buildNewsDetail(BuildContext context) {
     final (color, icon, label) = switch (entry.verdict) {
-      Verdict.real => (AppTheme.success, Icons.verified_rounded, 'Tin thật'),
-      Verdict.fake => (AppTheme.danger, Icons.dangerous_rounded, 'Tin giả'),
+      Verdict.real => (AppTheme.success, Icons.verified_rounded, 'verdict.real'.tr()),
+      Verdict.fake => (AppTheme.danger, Icons.dangerous_rounded, 'verdict.fake'.tr()),
       Verdict.uncertain =>
-        (AppTheme.warning, Icons.help_outline_rounded, 'Chưa xác định'),
+        (AppTheme.warning, Icons.help_outline_rounded, 'verdict.uncertain_full'.tr()),
     };
     final confidenceLabel = _confidenceLabel(entry.confidence);
     final extractedText = entry.extractedText.length > 300
@@ -91,7 +92,7 @@ class HistoryDetailScreen extends StatelessWidget {
         // Extracted text
         const SizedBox(height: 20),
         Text(
-          'Nội dung trích xuất',
+          'news_check.extracted_content'.tr(),
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -116,7 +117,7 @@ class HistoryDetailScreen extends StatelessWidget {
         if (entry.sources.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(
-            'Nguồn tham khảo',
+            'news_check.reference_sources'.tr(),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -185,11 +186,11 @@ class HistoryDetailScreen extends StatelessWidget {
   Widget _buildCallDetail(BuildContext context) {
     final (color, icon, label) = switch (entry.threatLevel) {
       ThreatLevel.safe =>
-        (AppTheme.success, Icons.verified_user_rounded, 'AN TOÀN'),
+        (AppTheme.success, Icons.verified_user_rounded, 'threat.safe_upper'.tr()),
       ThreatLevel.suspicious =>
-        (AppTheme.warning, Icons.shield_rounded, 'ĐÁNG NGỜ'),
+        (AppTheme.warning, Icons.shield_rounded, 'threat.suspicious_upper'.tr()),
       ThreatLevel.scam =>
-        (AppTheme.danger, Icons.gpp_bad_rounded, 'LỪA ĐẢO'),
+        (AppTheme.danger, Icons.gpp_bad_rounded, 'threat.scam_upper'.tr()),
     };
     final confidence = (entry.confidence * 100).round();
     final duration = entry.callDuration;
@@ -220,7 +221,7 @@ class HistoryDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Độ tin cậy: $confidence%',
+                'confidence.level'.tr(args: [confidence.toString()]),
                 style: Theme.of(context)
                     .textTheme
                     .bodyLarge
@@ -251,7 +252,7 @@ class HistoryDetailScreen extends StatelessWidget {
         const SizedBox(height: 16),
         Center(
           child: Text(
-            'Thời gian: $durationStr',
+            'detail.duration'.tr(args: [durationStr]),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -262,7 +263,7 @@ class HistoryDetailScreen extends StatelessWidget {
         if (entry.transcript.isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(
-            'Nội dung cuộc gọi',
+            'detail.call_content'.tr(),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),

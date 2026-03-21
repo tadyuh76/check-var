@@ -100,7 +100,8 @@ class MainActivity : FlutterActivity() {
                     }
                     // ── Analysis overlay ──────────────────────────────
                     "showAnalysisOverlay" -> {
-                        AnalysisOverlayService.show(this)
+                        val initialStatus = call.argument<String>("initialStatus") ?: ""
+                        AnalysisOverlayService.show(this, initialStatus)
                         result.success(null)
                     }
                     "hideAnalysisOverlay" -> {
@@ -114,14 +115,18 @@ class MainActivity : FlutterActivity() {
                     }
                     "showAnalysisResult" -> {
                         val verdict = call.argument<String>("verdict") ?: "uncertain"
+                        val verdictLabel = call.argument<String>("verdictLabel") ?: ""
                         val confidence = call.argument<String>("confidence") ?: ""
                         val summary = call.argument<String>("summary") ?: ""
-                        AnalysisOverlayService.showResult(verdict, confidence, summary)
+                        val closeLabel = call.argument<String>("closeLabel") ?: "Close"
+                        AnalysisOverlayService.showResult(verdict, verdictLabel, confidence, summary, closeLabel)
                         result.success(null)
                     }
                     "showAnalysisError" -> {
-                        val message = call.argument<String>("message") ?: "Đã xảy ra lỗi"
-                        AnalysisOverlayService.showError(message)
+                        val message = call.argument<String>("message") ?: ""
+                        val errorLabel = call.argument<String>("errorLabel") ?: "Error"
+                        val closeLabel = call.argument<String>("closeLabel") ?: "Close"
+                        AnalysisOverlayService.showError(message, errorLabel, closeLabel)
                         result.success(null)
                     }
                     else -> result.notImplemented()

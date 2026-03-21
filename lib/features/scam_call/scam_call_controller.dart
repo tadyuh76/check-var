@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../../core/api/gemini_scam_text_api.dart';
 import '../../core/api/local_scam_classifier.dart';
@@ -99,12 +100,12 @@ class ScamCallController extends ChangeNotifier {
   ScamCallSessionStatus get sessionStatus => _sessionStatus;
 
   String get sessionStatusLabel => switch (_sessionStatus) {
-    ScamCallSessionStatus.idle => 'Chờ',
-    ScamCallSessionStatus.connecting => 'Đang kết nối',
-    ScamCallSessionStatus.listening => 'Đang nghe',
-    ScamCallSessionStatus.reconnecting => 'Đang kết nối lại',
-    ScamCallSessionStatus.analyzing => 'Đang phân tích',
-    ScamCallSessionStatus.error => 'Lỗi',
+    ScamCallSessionStatus.idle => 'session_status.idle'.tr(),
+    ScamCallSessionStatus.connecting => 'session_status.connecting'.tr(),
+    ScamCallSessionStatus.listening => 'session_status.listening'.tr(),
+    ScamCallSessionStatus.reconnecting => 'session_status.reconnecting'.tr(),
+    ScamCallSessionStatus.analyzing => 'session_status.analyzing'.tr(),
+    ScamCallSessionStatus.error => 'session_status.error'.tr(),
   };
 
   Future<void> startListening() async {

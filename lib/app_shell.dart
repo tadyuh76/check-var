@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'controllers/news_check_controller.dart';
 import 'providers/home_state_provider.dart';
 import 'services/platform_channel.dart';
@@ -55,6 +56,10 @@ class _AppShellState extends State<AppShell> {
     try {
       HapticFeedback.heavyImpact();
 
+      try {
+        await PlatformChannel.showGlowOverlay();
+      } catch (_) {}
+
       // Poll for OCR result — screenshot + ML Kit can take 1-5 seconds
       String? screenText;
       for (int i = 0; i < 10; i++) {
@@ -86,21 +91,21 @@ class _AppShellState extends State<AppShell> {
         onDestinationSelected: (index) {
           setState(() => _currentIndex = index);
         },
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'Lịch sử',
+            icon: const Icon(Icons.history_outlined),
+            selectedIcon: const Icon(Icons.history),
+            label: 'nav.history'.tr(),
           ),
           NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'Trang chủ',
+            icon: const Icon(Icons.home_outlined),
+            selectedIcon: const Icon(Icons.home),
+            label: 'nav.home'.tr(),
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Cài đặt',
+            icon: const Icon(Icons.settings_outlined),
+            selectedIcon: const Icon(Icons.settings),
+            label: 'nav.settings'.tr(),
           ),
         ],
       ),

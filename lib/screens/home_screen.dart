@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../core/platform_channel.dart' as core_channel;
 import '../features/scam_call/live/live_caption_transcript_gateway.dart';
 import '../features/scam_call/live/simulated_call_scenario.dart';
@@ -54,19 +55,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: const Text('Cần quyền Accessibility'),
-          content: const Text(
-            'CheckVar cần quyền Accessibility Service để chụp màn hình khi bạn lắc điện thoại.\n\n'
-            'Vui lòng tìm và bật "CheckVar" trong cài đặt Accessibility.',
-          ),
+          title: Text('home.need_accessibility'.tr()),
+          content: Text('home.accessibility_desc'.tr()),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Để sau'),
+              child: Text('home.later'.tr()),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Mở cài đặt'),
+              child: Text('home.open_settings'.tr()),
             ),
           ],
         ),
@@ -85,19 +83,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
-          title: const Text('Cần quyền hiển thị trên ứng dụng khác'),
-          content: const Text(
-            'CheckVar cần quyền này để hiện hiệu ứng khi lắc điện thoại.\n\n'
-            'Vui lòng bật "Hiển thị trên ứng dụng khác" cho CheckVar.',
-          ),
+          title: Text('home.need_overlay'.tr()),
+          content: Text('home.overlay_desc'.tr()),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Để sau'),
+              child: Text('home.later'.tr()),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Mở cài đặt'),
+              child: Text('home.open_settings'.tr()),
             ),
           ],
         ),
@@ -117,9 +112,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     context.read<HomeStateProvider>().setNewsCheckEnabled(true);
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Lắc điện thoại 2 lần để kiểm tra'),
-        duration: Duration(seconds: 3),
+      SnackBar(
+        content: Text('home.shake_to_check'.tr()),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -152,9 +147,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     provider.setScamCallEnabled(true);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Lắc điện thoại 2 lần để kiểm tra'),
-          duration: Duration(seconds: 3),
+        SnackBar(
+          content: Text('home.shake_to_check'.tr()),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -203,10 +198,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!hasAccessibility) {
       if (!mounted) return false;
       final opened = await _showPermissionDialog(
-        title: 'Bật Accessibility Service',
-        content:
-            'CheckVar cần quyền Accessibility để đọc phụ đề từ Live Caption.\n\n'
-            'Vui lòng tìm và bật "CheckVar" trong cài đặt Accessibility.',
+        title: 'home.enable_accessibility'.tr(),
+        content: 'home.accessibility_caption_desc'.tr(),
       );
       if (opened) {
         _waitingForPermission = true;
@@ -219,8 +212,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (!granted) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Accessibility Service chưa được bật.'),
+              SnackBar(
+                content: Text('home.accessibility_not_enabled'.tr()),
               ),
             );
           }
@@ -239,20 +232,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text('Bật Live Caption'),
-        content: const Text(
-          'Live Caption cần được bật để phụ đề cuộc gọi hiển thị.\n\n'
-          'Mở Cài đặt và tìm "Live Caption" trong thanh tìm kiếm, '
-          'sau đó bật lên.',
-        ),
+        title: Text('home.enable_live_caption'.tr()),
+        content: Text('home.live_caption_desc'.tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Để sau'),
+            child: Text('home.later'.tr()),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Đã bật'),
+            child: Text('home.already_enabled'.tr()),
           ),
         ],
       ),
@@ -274,11 +263,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Để sau'),
+                child: Text('home.later'.tr()),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Mở cài đặt'),
+                child: Text('home.open_settings'.tr()),
               ),
             ],
           ),
@@ -369,16 +358,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: _buildFeatureCard(
                 context,
                 isEnabled: homeState.newsCheckEnabled,
-                title: 'Kiểm tra\ntin giả',
+                title: 'home.check_fake_news'.tr(),
                 icon: Icons.newspaper_rounded,
                 onGradient: AppTheme.newsCardOnGradient,
                 offColor: AppTheme.cardOffColor(brightness),
                 onTap: () => _toggleNewsCheck(homeState.newsCheckEnabled),
                 onInfoTap: () => _showInfoSheet(
-                  'Kiểm tra tin giả',
-                  'Khi bật, hãy mở app tin tức bất kỳ và lắc điện thoại 2 lần. '
-                      'CheckVar sẽ tự động chụp màn hình, trích xuất nội dung, '
-                      'tìm kiếm nguồn xác minh và phân tích độ tin cậy bằng AI.',
+                  'home.check_fake_news_title'.tr(),
+                  'home.check_fake_news_desc'.tr(),
                 ),
               ),
             ),
@@ -387,17 +374,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: _buildFeatureCard(
                 context,
                 isEnabled: homeState.scamCallEnabled,
-                title: 'Phát hiện\nlừa đảo',
+                title: 'home.detect_scam'.tr(),
                 icon: Icons.shield_rounded,
                 onGradient: AppTheme.callCardOnGradient,
                 offColor: AppTheme.cardOffColor(brightness),
                 onTap: () => _toggleScamCall(homeState.scamCallEnabled),
                 onInfoTap: () => _showInfoSheet(
-                  'Phát hiện lừa đảo',
-                  'Khi bật, CheckVar sẽ theo dõi cuộc gọi đến và phân tích '
-                      'nội dung cuộc trò chuyện theo thời gian thực. Nếu phát hiện '
-                      'dấu hiệu lừa đảo (giả danh, áp lực chuyển tiền...), '
-                      'ứng dụng sẽ cảnh báo ngay lập tức.',
+                  'home.detect_scam_title'.tr(),
+                  'home.detect_scam_desc'.tr(),
                 ),
               ),
             ),
@@ -485,7 +469,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    isEnabled ? 'Đang bật' : 'Tắt',
+                    isEnabled ? 'home.enabled'.tr() : 'home.disabled'.tr(),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,

@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../controllers/news_check_controller.dart';
 import '../models/check_result.dart';
 import '../theme/app_theme.dart';
 
 String _confidenceLabel(double confidence) {
-  if (confidence >= 0.85) return 'Rất chắc chắn';
-  if (confidence >= 0.65) return 'Khá chắc chắn';
-  if (confidence >= 0.45) return 'Chưa rõ ràng';
-  if (confidence >= 0.25) return 'Không chắc chắn';
-  return 'Rất không chắc chắn';
+  if (confidence >= 0.85) return 'confidence.very_sure'.tr();
+  if (confidence >= 0.65) return 'confidence.quite_sure'.tr();
+  if (confidence >= 0.45) return 'confidence.unclear'.tr();
+  if (confidence >= 0.25) return 'confidence.not_sure'.tr();
+  return 'confidence.very_unsure'.tr();
 }
 
 class NewsCheckScreen extends StatelessWidget {
@@ -20,7 +21,7 @@ class NewsCheckScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kết quả kiểm tra'),
+        title: Text('news_check.result_title'.tr()),
         centerTitle: true,
       ),
       body: Consumer<NewsCheckController>(
@@ -37,13 +38,13 @@ class NewsCheckScreen extends StatelessWidget {
   Widget _buildContent(BuildContext context, NewsCheckController controller) {
     switch (controller.status) {
       case NewsCheckStatus.idle:
-        return const Center(child: Text('Không có dữ liệu'));
+        return Center(child: Text('news_check.no_data'.tr()));
       case NewsCheckStatus.extracting:
-        return _buildLoading(context, 'Đang trích xuất nội dung...', 0);
+        return _buildLoading(context, 'news_check.extracting'.tr(), 0);
       case NewsCheckStatus.searching:
-        return _buildLoading(context, 'Đang tìm kiếm nguồn...', 1);
+        return _buildLoading(context, 'news_check.searching'.tr(), 1);
       case NewsCheckStatus.classifying:
-        return _buildLoading(context, 'Đang phân tích độ tin cậy...', 2);
+        return _buildLoading(context, 'news_check.analyzing'.tr(), 2);
       case NewsCheckStatus.error:
         return _buildError(context, controller);
       case NewsCheckStatus.done:
@@ -101,7 +102,7 @@ class NewsCheckScreen extends StatelessWidget {
                 size: 56, color: AppTheme.danger),
             const SizedBox(height: 16),
             Text(
-              'Đã xảy ra lỗi',
+              'news_check.error_occurred'.tr(),
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: AppTheme.danger,
                   ),
@@ -118,7 +119,7 @@ class NewsCheckScreen extends StatelessWidget {
                 controller.reset();
                 Navigator.pop(context);
               },
-              child: const Text('Quay lại'),
+              child: Text('news_check.go_back'.tr()),
             ),
           ],
         ),
@@ -148,7 +149,7 @@ class NewsCheckScreen extends StatelessWidget {
               controller.reset();
               Navigator.pop(context);
             },
-            child: const Text('Kiểm tra lại'),
+            child: Text('news_check.check_again'.tr()),
           ),
         ),
       ],
@@ -157,11 +158,11 @@ class NewsCheckScreen extends StatelessWidget {
 
   Widget _buildVerdictCard(BuildContext context, CheckResult result) {
     final (color, icon, label) = switch (result.verdict) {
-      Verdict.real => (AppTheme.success, Icons.verified_rounded, 'Tin thật'),
+      Verdict.real => (AppTheme.success, Icons.verified_rounded, 'verdict.real'.tr()),
       Verdict.fake =>
-        (AppTheme.danger, Icons.dangerous_rounded, 'Tin giả'),
+        (AppTheme.danger, Icons.dangerous_rounded, 'verdict.fake'.tr()),
       Verdict.uncertain =>
-        (AppTheme.warning, Icons.help_outline_rounded, 'Chưa xác định'),
+        (AppTheme.warning, Icons.help_outline_rounded, 'verdict.uncertain_full'.tr()),
     };
 
     final confidenceLabel = _confidenceLabel(result.confidence);
@@ -209,7 +210,7 @@ class NewsCheckScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Nội dung trích xuất',
+          'news_check.extracted_content'.tr(),
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -238,7 +239,7 @@ class NewsCheckScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Nguồn tham khảo',
+          'news_check.reference_sources'.tr(),
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),

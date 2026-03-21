@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../providers/theme_provider.dart';
 import '../services/history_service.dart';
 
@@ -9,34 +10,54 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
+    final currentLocale = context.locale;
+    final isVietnamese = currentLocale.languageCode == 'vi';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cài đặt'),
+        title: Text('settings.title'.tr()),
         centerTitle: true,
       ),
       body: ListView(
         children: [
-          _buildSectionHeader(context, 'Giao diện'),
+          _buildSectionHeader(context, 'settings.interface'.tr()),
           ListTile(
-            title: const Text('Chế độ tối'),
+            title: Text('settings.dark_mode'.tr()),
             trailing: Switch(
               value: themeProvider.isDarkMode,
               onChanged: (_) => themeProvider.toggleTheme(),
             ),
           ),
-          const Divider(),
-          _buildSectionHeader(context, 'Dữ liệu'),
           ListTile(
-            title: const Text('Xóa lịch sử'),
+            title: Text('settings.language'.tr()),
+            trailing: SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'vi', label: Text('VI')),
+                ButtonSegment(value: 'en', label: Text('EN')),
+              ],
+              selected: {isVietnamese ? 'vi' : 'en'},
+              onSelectionChanged: (selected) {
+                final lang = selected.first;
+                context.setLocale(Locale(lang));
+              },
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+          const Divider(),
+          _buildSectionHeader(context, 'settings.data'.tr()),
+          ListTile(
+            title: Text('settings.clear_history'.tr()),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _showClearHistoryDialog(context),
           ),
           const Divider(),
-          _buildSectionHeader(context, 'Thông tin'),
-          const ListTile(
-            title: Text('Phiên bản'),
-            trailing: Text('1.0.0'),
+          _buildSectionHeader(context, 'settings.info'.tr()),
+          ListTile(
+            title: Text('settings.version'.tr()),
+            trailing: const Text('1.0.0'),
           ),
         ],
       ),
@@ -60,12 +81,12 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Xóa lịch sử'),
-        content: const Text('Bạn có chắc muốn xóa toàn bộ lịch sử kiểm tra?'),
+        title: Text('settings.clear_history'.tr()),
+        content: Text('settings.clear_history_confirm'.tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Hủy'),
+            child: Text('settings.cancel'.tr()),
           ),
           FilledButton(
             onPressed: () async {
@@ -73,14 +94,14 @@ class SettingsScreen extends StatelessWidget {
               if (ctx.mounted) Navigator.pop(ctx);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Đã xóa lịch sử')),
+                  SnackBar(content: Text('settings.history_cleared'.tr())),
                 );
               }
             },
             style: FilledButton.styleFrom(
               backgroundColor: Colors.red,
             ),
-            child: const Text('Xóa'),
+            child: Text('settings.delete'.tr()),
           ),
         ],
       ),

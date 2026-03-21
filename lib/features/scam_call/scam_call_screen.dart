@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../../models/scam_alert.dart';
 import '../../widgets/scam_detail_sheet.dart';
@@ -77,7 +78,7 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Phát hiện lừa đảo'),
+        title: Text('scam_call.title'.tr()),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.of(context).pop(),
@@ -121,9 +122,9 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
 
   Widget _buildThreatBanner(ColorScheme colorScheme) {
     final (color, icon, label) = switch (_controller.threatLevel) {
-      ThreatLevel.safe => (Colors.green, Icons.verified_user_rounded, 'AN TOÀN'),
-      ThreatLevel.suspicious => (Colors.amber, Icons.warning_rounded, 'ĐÁNG NGỜ'),
-      ThreatLevel.scam => (Colors.red, Icons.gpp_bad_rounded, 'LỪA ĐẢO'),
+      ThreatLevel.safe => (Colors.green, Icons.verified_user_rounded, 'threat.safe_upper'.tr()),
+      ThreatLevel.suspicious => (Colors.amber, Icons.warning_rounded, 'threat.suspicious_upper'.tr()),
+      ThreatLevel.scam => (Colors.red, Icons.gpp_bad_rounded, 'threat.scam_upper'.tr()),
     };
 
     final hasAnalysis =
@@ -185,7 +186,7 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
                 const SizedBox(height: 6),
               ],
               Text(
-                'Trạng thái',
+                'scam_call.status'.tr(),
                 style: Theme.of(context).textTheme.labelLarge,
               ),
               const SizedBox(height: 6),
@@ -267,7 +268,7 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Nhấn để xem chi tiết',
+                      'scam_call.tap_details'.tr(),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: threatColor.withValues(alpha: 0.6),
                         fontSize: 13,
@@ -315,8 +316,8 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
           const SizedBox(height: 16),
           Text(
             _controller.isListening
-                ? 'Đang chờ phụ đề...'
-                : 'Đang kết nối Live Caption...',
+                ? 'scam_call.waiting_captions'.tr()
+                : 'scam_call.connecting_live_caption'.tr(),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: colorScheme.onSurface.withValues(alpha: 0.6),
             ),
@@ -344,7 +345,9 @@ class _ScamCallScreenState extends State<ScamCallScreen> {
           },
           icon: Icon(_controller.isListening ? Icons.stop : Icons.mic),
           label: Text(
-            _controller.isListening ? 'Dừng nghe' : 'Bắt đầu nghe',
+            _controller.isListening
+                ? 'scam_call.stop_listening'.tr()
+                : 'scam_call.start_listening'.tr(),
             style: const TextStyle(fontSize: 16),
           ),
           style: FilledButton.styleFrom(

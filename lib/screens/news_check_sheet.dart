@@ -2,16 +2,17 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../controllers/news_check_controller.dart';
 import '../models/check_result.dart';
 import '../theme/app_theme.dart';
 
 String _confidenceLabel(double confidence) {
-  if (confidence >= 0.85) return 'Rất chắc chắn';
-  if (confidence >= 0.65) return 'Khá chắc chắn';
-  if (confidence >= 0.45) return 'Chưa rõ ràng';
-  if (confidence >= 0.25) return 'Không chắc chắn';
-  return 'Rất không chắc chắn';
+  if (confidence >= 0.85) return 'confidence.very_sure'.tr();
+  if (confidence >= 0.65) return 'confidence.quite_sure'.tr();
+  if (confidence >= 0.45) return 'confidence.unclear'.tr();
+  if (confidence >= 0.25) return 'confidence.not_sure'.tr();
+  return 'confidence.very_unsure'.tr();
 }
 
 /// Shows the news check bottom sheet overlay.
@@ -149,10 +150,10 @@ class _NewsCheckSheetState extends State<_NewsCheckSheet>
 
   Widget _buildAnalyzing(NewsCheckController controller) {
     final statusText = switch (controller.status) {
-      NewsCheckStatus.extracting => 'Đang trích xuất nội dung...',
-      NewsCheckStatus.searching => 'Đang tìm kiếm nguồn...',
-      NewsCheckStatus.classifying => 'Đang phân tích độ tin cậy...',
-      _ => 'Đang chuẩn bị...',
+      NewsCheckStatus.extracting => 'news_check.extracting'.tr(),
+      NewsCheckStatus.searching => 'news_check.searching'.tr(),
+      NewsCheckStatus.classifying => 'news_check.analyzing'.tr(),
+      _ => 'news_check.preparing'.tr(),
     };
 
     return Expanded(
@@ -283,7 +284,7 @@ class _NewsCheckSheetState extends State<_NewsCheckSheet>
               size: 56, color: AppTheme.danger),
           const SizedBox(height: 16),
           Text(
-            'Đã xảy ra lỗi',
+            'news_check.error_occurred'.tr(),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: AppTheme.danger,
                 ),
@@ -327,10 +328,10 @@ class _NewsCheckSheetState extends State<_NewsCheckSheet>
 
   Widget _buildVerdictCard(CheckResult result) {
     final (color, icon, label) = switch (result.verdict) {
-      Verdict.real => (AppTheme.success, Icons.verified_rounded, 'Tin thật'),
-      Verdict.fake => (AppTheme.danger, Icons.dangerous_rounded, 'Tin giả'),
+      Verdict.real => (AppTheme.success, Icons.verified_rounded, 'verdict.real'.tr()),
+      Verdict.fake => (AppTheme.danger, Icons.dangerous_rounded, 'verdict.fake'.tr()),
       Verdict.uncertain =>
-        (AppTheme.warning, Icons.help_outline_rounded, 'Chưa xác định'),
+        (AppTheme.warning, Icons.help_outline_rounded, 'verdict.uncertain_full'.tr()),
     };
 
     final confidenceText = _confidenceLabel(result.confidence);
@@ -381,7 +382,7 @@ class _NewsCheckSheetState extends State<_NewsCheckSheet>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Nội dung trích xuất',
+          'news_check.extracted_content'.tr(),
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -410,7 +411,7 @@ class _NewsCheckSheetState extends State<_NewsCheckSheet>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Nguồn tham khảo',
+          'news_check.reference_sources'.tr(),
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -485,7 +486,7 @@ class _NewsCheckSheetState extends State<_NewsCheckSheet>
           NewsCheckController.instance.reset();
           Navigator.pop(context);
         },
-        child: const Text('Đóng'),
+        child: Text('news_check.close'.tr()),
       ),
     );
   }
