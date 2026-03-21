@@ -175,6 +175,10 @@ class HistoryDetailScreen extends StatelessWidget {
   }
 
   Widget _buildCallDetail(BuildContext context) {
+    if (!entry.wasAnalyzed) {
+      return _buildUnanalyzedCallDetail(context);
+    }
+
     final (color, icon, label) = switch (entry.threatLevel) {
       ThreatLevel.safe =>
         (AppTheme.success, Icons.verified_user_rounded, 'AN TOÀN'),
@@ -195,9 +199,9 @@ class HistoryDetailScreen extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: color.withValues(alpha:0.08),
+            color: color.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withValues(alpha:0.25)),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
           ),
           child: Column(
             children: [
@@ -218,6 +222,15 @@ class HistoryDetailScreen extends StatelessWidget {
                     .bodyLarge
                     ?.copyWith(color: color),
               ),
+              if (entry.scamProbability != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Xác suất lừa đảo: ${(entry.scamProbability! * 100).round()}%',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: color.withValues(alpha: 0.8),
+                      ),
+                ),
+              ],
               if (entry.patterns.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 Wrap(
@@ -229,7 +242,7 @@ class HistoryDetailScreen extends StatelessWidget {
                             label: Text(p,
                                 style:
                                     TextStyle(fontSize: 12, color: color)),
-                            backgroundColor: color.withValues(alpha:0.1),
+                            backgroundColor: color.withValues(alpha: 0.1),
                             side: BorderSide.none,
                             visualDensity: VisualDensity.compact,
                           ))
@@ -240,6 +253,19 @@ class HistoryDetailScreen extends StatelessWidget {
           ),
         ),
 
+        // Caller number
+        if (entry.callerNumber != null) ...[
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              'Số gọi: ${entry.callerNumber}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        ],
+
         const SizedBox(height: 16),
         Center(
           child: Text(
@@ -249,6 +275,55 @@ class HistoryDetailScreen extends StatelessWidget {
                 ),
           ),
         ),
+
+        // Summary & advice
+        if (entry.callSummary != null && entry.callSummary!.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(
+            'Tóm tắt',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              entry.callSummary!,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+        if (entry.callAdvice != null && entry.callAdvice!.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.lightbulb_outline, size: 20,
+                    color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    entry.callAdvice!,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
 
         // Transcript
         if (entry.transcript.isNotEmpty) ...[
@@ -275,6 +350,68 @@ class HistoryDetailScreen extends StatelessWidget {
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildUnanalyzedCallDetail(BuildContext context) {
+    final duration = entry.callDuration;
+    final durationStr =
+        '${duration.inMinutes.toString().padLeft(2, '0')}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.grey.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.25)),
+          ),
+          child: Column(
+            children: [
+              const Icon(Icons.phone_missed_rounded, size: 48, color: Colors.grey),
+              const SizedBox(height: 12),
+              Text(
+                'KHÔNG PHÂN TÍCH',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Chưa kích hoạt phát hiện lừa đảo',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey,
+                    ),
+              ),
+            ],
+          ),
+        ),
+
+        if (entry.callerNumber != null) ...[
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              'Số gọi: ${entry.callerNumber}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+        ],
+
+        const SizedBox(height: 16),
+        Center(
+          child: Text(
+            'Thời gian: $durationStr',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ),
       ],
     );
   }
