@@ -41,6 +41,17 @@ class ScamCallSessionManager extends ChangeNotifier {
   ScamCallController? get controller => _controller;
   ScamCallSessionKind get sessionKind => _sessionKind;
   bool get hasActiveSession => _controller != null;
+
+  /// Removes the controller from management without stopping or disposing it.
+  /// The caller takes ownership and is responsible for disposal.
+  ScamCallController? detachController() {
+    final controller = _controller;
+    _controller = null;
+    _sessionKind = ScamCallSessionKind.idle;
+    notifyListeners();
+    return controller;
+  }
+
   String? get modeLabel => switch (_sessionKind) {
     ScamCallSessionKind.liveCall => 'Live Call Debug',
     ScamCallSessionKind.simulation => 'Simulation Mode',
