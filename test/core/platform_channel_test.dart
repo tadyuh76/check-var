@@ -56,6 +56,7 @@ void main() {
     expect(log.single.arguments, {
       'threatLevel': 'scam',
       'sessionStatus': 'analyzing',
+      'confidence': -1,
     });
   });
 }

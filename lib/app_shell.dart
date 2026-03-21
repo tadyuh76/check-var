@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'controllers/news_check_controller.dart';
+import 'features/scam_call/scam_call_screen.dart';
 import 'providers/home_state_provider.dart';
 import 'services/platform_channel.dart';
 import 'services/shake_service.dart';
@@ -46,6 +47,11 @@ class _AppShellState extends State<AppShell> {
   Future<void> _handleShake(String mode) async {
     if (_isProcessing) return;
 
+    if (mode == 'call') {
+      await _handleCallShake();
+      return;
+    }
+
     final controller = NewsCheckController.instance;
     if (controller.isProcessing) return;
 
@@ -86,6 +92,27 @@ class _AppShellState extends State<AppShell> {
       }
     } catch (e) {
       debugPrint('Error handling shake: $e');
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  Future<void> _handleCallShake() async {
+    final homeState = context.read<HomeStateProvider>();
+    if (!homeState.scamCallEnabled) return;
+
+    _isProcessing = true;
+    try {
+      HapticFeedback.heavyImpact();
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const ScamCallScreen(
+              modeLabel: 'Live Caption',
+            ),
+          ),
+        );
+      }
     } finally {
       _isProcessing = false;
     }

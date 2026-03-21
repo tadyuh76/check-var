@@ -123,14 +123,16 @@ class PlatformChannel {
     await _methodChannel.invokeMethod('hideOverlayBubble');
   }
 
-  /// Update the overlay bubble status (verdict color + label).
+  /// Update the overlay bubble status (verdict color + label + confidence).
   static Future<void> updateOverlayStatus({
     required String threatLevel,
     required String sessionStatus,
+    int confidence = -1,
   }) async {
     await _methodChannel.invokeMethod('updateOverlayStatus', {
       'threatLevel': threatLevel,
       'sessionStatus': sessionStatus,
+      'confidence': confidence,
     });
   }
 

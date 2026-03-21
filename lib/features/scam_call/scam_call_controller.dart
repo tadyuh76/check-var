@@ -16,6 +16,7 @@ typedef OverlayStatusCallback =
     Future<void> Function(
       ThreatLevel threatLevel,
       ScamCallSessionStatus sessionStatus,
+      double confidence,
     );
 
 enum ScamCallSessionStatus {
@@ -354,7 +355,7 @@ class ScamCallController extends ChangeNotifier {
   }
 
   Future<void> _publishOverlayStatus() async {
-    await onOverlayStatusUpdate?.call(_threatLevel, _sessionStatus);
+    await onOverlayStatusUpdate?.call(_threatLevel, _sessionStatus, _confidence);
   }
 
   @override

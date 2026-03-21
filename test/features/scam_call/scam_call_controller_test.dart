@@ -128,7 +128,7 @@ void main() {
       transcriptGateway: gateway,
       classifier: classifier,
       analysisDebounce: const Duration(milliseconds: 10),
-      onOverlayStatusUpdate: (threatLevel, sessionStatus) async {
+      onOverlayStatusUpdate: (threatLevel, sessionStatus, confidence) async {
         updates.add((threatLevel, sessionStatus));
       },
     );

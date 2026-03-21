@@ -127,10 +127,12 @@ class ScamCallSessionManager extends ChangeNotifier {
   static Future<void> _updateOverlayStatus(
     ThreatLevel threatLevel,
     ScamCallSessionStatus sessionStatus,
+    double confidence,
   ) {
     return PlatformChannel.updateOverlayStatus(
       threatLevel: threatLevel.name,
       sessionStatus: sessionStatus.name,
+      confidence: (confidence * 100).round(),
     );
   }
 

@@ -112,6 +112,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // All permissions granted
     await PlatformChannel.startShakeService();
     await PlatformChannel.setMode('news');
+    await core_channel.PlatformChannel.setNewsDetectionEnabled(true);
 
     if (!mounted) return;
     context.read<HomeStateProvider>().setNewsCheckEnabled(true);
@@ -125,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _deactivateNewsCheck() async {
+    await core_channel.PlatformChannel.setNewsDetectionEnabled(false);
     await PlatformChannel.stopShakeService();
     if (!mounted) return;
     context.read<HomeStateProvider>().setNewsCheckEnabled(false);
@@ -141,6 +143,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _toggleScamCall(bool isEnabled) async {
     final provider = context.read<HomeStateProvider>();
     if (isEnabled) {
+      await core_channel.PlatformChannel.setCallDetectionEnabled(false);
       provider.setScamCallEnabled(false);
       return;
     }
@@ -149,11 +152,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final ready = await _ensureLiveCaptionPermissions();
     if (!ready || !mounted) return;
 
+    // Enable call detection on the native side — this starts the shake
+    // service and call monitor via syncServices().
+    await core_channel.PlatformChannel.setCallDetectionEnabled(true);
+
     provider.setScamCallEnabled(true);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Lắc điện thoại 2 lần để kiểm tra'),
+          content: Text('Lắc điện thoại 2 lần trong cuộc gọi để kiểm tra'),
           duration: Duration(seconds: 3),
         ),
       );

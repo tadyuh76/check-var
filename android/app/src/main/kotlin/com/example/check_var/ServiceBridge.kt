@@ -178,7 +178,8 @@ class ServiceBridge private constructor() {
             "updateOverlayStatus" -> {
                 val threatLevel = call.argument<String>("threatLevel") ?: "safe"
                 val sessionStatus = call.argument<String>("sessionStatus") ?: "idle"
-                OverlayBubbleService.updateStatus(sessionStatus, threatLevel)
+                val confidence = call.argument<Int>("confidence") ?: -1
+                OverlayBubbleService.updateStatus(sessionStatus, threatLevel, confidence)
                 result.success(true)
             }
             // ── TTS ─────────────────────────────────────────────────────
@@ -279,6 +280,7 @@ class ServiceBridge private constructor() {
             when {
                 callDetectionEnabled && isCallActive -> {
                     emitShake("call")
+                    bringAppToForeground()
                 }
                 newsDetectionEnabled -> {
                     emitShake("news")
