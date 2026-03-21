@@ -76,15 +76,41 @@ class CallMonitorService : Service() {
         val isActive = CallMonitorPolicy.isCallActive(state)
         android.util.Log.d("CallMonitor", "handleCallState: state=$state, isActive=$isActive")
 
-        val event = EventPayloadBuilder.buildCallActiveEvent(isActive)
-        onCallStateChanged?.invoke(event)
-
-        // Show standby overlay as soon as call is active.
-        if (isActive) {
-            val overlayIntent = Intent(this, OverlayBubbleService::class.java)
-            startService(overlayIntent)
+        // ── RINGING: read dialer to identify caller ──────────────
+        if (state == android.telephony.TelephonyManager.CALL_STATE_RINGING) {
+            val a11y = CheckVarAccessibilityService.instance
+            val dialerText = a11y?.readDialerCallerInfo()
+            val callerType = CallerIdentityResolver.resolve(dialerText)
+            ServiceBridge.instance.cacheCallerType(callerType)
+            android.util.Log.d("CallMonitor", "RINGING: dialerText='${dialerText?.take(40)}', callerType=$callerType")
         }
 
+        // ── OFFHOOK: gate on caller type ─────────────────────────
+        if (isActive) {
+            val callerType = ServiceBridge.instance.lastCallerType
+            if (callerType == CallerIdentityResolver.CallerType.KNOWN_CONTACT) {
+                android.util.Log.d("CallMonitor", "OFFHOOK: known contact — suppressing scam detection")
+                return
+            }
+
+            val event = EventPayloadBuilder.buildCallActiveEvent(isActive)
+            onCallStateChanged?.invoke(event)
+
+            val overlayIntent = Intent(this, OverlayBubbleService::class.java)
+            startService(overlayIntent)
+        } else {
+            val event = EventPayloadBuilder.buildCallActiveEvent(isActive)
+            onCallStateChanged?.invoke(event)
+        }
+
+        // ── IDLE: reset caller type cache + hide overlay ─────────
+        // IMPORTANT: Only reset caller type on IDLE, not RINGING.
+        // shouldHideOverlay() returns true for BOTH IDLE and RINGING,
+        // but resetting on RINGING would wipe the cache we just set above,
+        // making the feature silently never work.
+        if (state == android.telephony.TelephonyManager.CALL_STATE_IDLE) {
+            ServiceBridge.instance.resetCallerType()
+        }
         if (CallMonitorPolicy.shouldHideOverlay(state)) {
             val overlayIntent = Intent(this, OverlayBubbleService::class.java)
             stopService(overlayIntent)
