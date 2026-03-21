@@ -41,6 +41,8 @@ class ServiceBridge private constructor() {
     /** Cached caller identity from the most recent RINGING event. */
     var lastCallerType: CallerIdentityResolver.CallerType = CallerIdentityResolver.CallerType.UNDETERMINED
         private set
+    var lastCallerDisplayText: String? = null
+        private set
     private var tts: TextToSpeech? = null
     private var speakerRoutingActive: Boolean = false
     private var previousSpeakerphoneState: Boolean? = null
@@ -281,13 +283,15 @@ class ServiceBridge private constructor() {
 
     // ── Caller identity cache ────────────────────────────────────────────────
 
-    fun cacheCallerType(type: CallerIdentityResolver.CallerType) {
+    fun cacheCallerInfo(type: CallerIdentityResolver.CallerType, displayText: String?) {
         lastCallerType = type
-        Log.d(TAG, "cacheCallerType: $type")
+        lastCallerDisplayText = displayText
+        Log.d(TAG, "cacheCallerInfo: type=$type, displayText='${displayText?.take(40)}'")
     }
 
     fun resetCallerType() {
         lastCallerType = CallerIdentityResolver.CallerType.UNDETERMINED
+        lastCallerDisplayText = null
         Log.d(TAG, "resetCallerType: reset to UNDETERMINED")
     }
 

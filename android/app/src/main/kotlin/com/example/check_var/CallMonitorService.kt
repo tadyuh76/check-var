@@ -18,7 +18,7 @@ class CallMonitorService : Service() {
         private const val CHANNEL_ID = "call_monitor_channel"
         private const val NOTIFICATION_ID = 3001
 
-        var onCallStateChanged: ((Map<String, Any>) -> Unit)? = null
+        var onCallStateChanged: ((Map<String, Any?>) -> Unit)? = null
     }
 
     private var telephonyManager: TelephonyManager? = null
@@ -81,7 +81,7 @@ class CallMonitorService : Service() {
             val a11y = CheckVarAccessibilityService.instance
             val dialerText = a11y?.readDialerCallerInfo()
             val callerType = CallerIdentityResolver.resolve(dialerText)
-            ServiceBridge.instance.cacheCallerType(callerType)
+            ServiceBridge.instance.cacheCallerInfo(callerType, dialerText)
             android.util.Log.d("CallMonitor", "RINGING: dialerText='${dialerText?.take(40)}', callerType=$callerType")
         }
 
@@ -93,13 +93,19 @@ class CallMonitorService : Service() {
                 return
             }
 
-            val event = EventPayloadBuilder.buildCallActiveEvent(isActive)
+            val event = EventPayloadBuilder.buildCallActiveEvent(
+                isActive,
+                callerDisplayText = ServiceBridge.instance.lastCallerDisplayText,
+            )
             onCallStateChanged?.invoke(event)
 
             val overlayIntent = Intent(this, OverlayBubbleService::class.java)
             startService(overlayIntent)
         } else {
-            val event = EventPayloadBuilder.buildCallActiveEvent(isActive)
+            val event = EventPayloadBuilder.buildCallActiveEvent(
+                isActive,
+                callerDisplayText = ServiceBridge.instance.lastCallerDisplayText,
+            )
             onCallStateChanged?.invoke(event)
         }
 
