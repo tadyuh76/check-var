@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../api/jigsawstack_api.dart';
+import '../api/fact_check_api.dart';
 import '../models/check_result.dart';
 import '../models/history_entry.dart';
 import '../services/history_service.dart';
@@ -36,35 +36,22 @@ class NewsCheckController extends ChangeNotifier {
     _errorMessage = '';
 
     try {
-      // Show ongoing notification
       await NotificationService.showAnalyzing();
 
       // Step 1: Clean OCR text
       _setStatus(NewsCheckStatus.extracting);
       final cleanedText = cleanOcrText(screenText);
 
-      // Step 2: Extract search queries
-      final queries = extractSearchQueries(cleanedText);
+      // Step 2: Extract search query via LLM
+      final query = await extractSearchQuery(cleanedText);
 
-      // Step 3: Web search (parallel for all queries)
+      // Step 3: Web search via Serper
       _setStatus(NewsCheckStatus.searching);
-      final searchFutures = queries.map((q) => webSearch(q));
-      final searchResults = await Future.wait(searchFutures);
-
-      // Merge and deduplicate sources
-      final seen = <String>{};
-      final allSources = <SearchSource>[];
-      for (final results in searchResults) {
-        for (final source in results) {
-          if (seen.add(source.url)) {
-            allSources.add(source);
-          }
-        }
-      }
+      final sources = await webSearch(query);
 
       // Step 4: LLM classification
       _setStatus(NewsCheckStatus.classifying);
-      final result = await classifyNews(cleanedText, allSources);
+      final result = await classifyNews(cleanedText, sources);
 
       _result = result;
       _setStatus(NewsCheckStatus.done);
