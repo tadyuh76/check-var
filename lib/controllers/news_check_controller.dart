@@ -49,24 +49,15 @@ class NewsCheckController extends ChangeNotifier {
         initialStatus: 'news_check.preparing'.tr(),
       );
 
-      // Step 1: Clean OCR text
+      // Step 1: Clean OCR text (on-device)
       _setStatus(NewsCheckStatus.extracting);
       await PlatformChannel.updateAnalysisStatus('news_check.extracting'.tr());
       final cleanedText = cleanOcrText(screenText);
 
-      // Step 2: Extract search query via LLM
-      await PlatformChannel.updateAnalysisStatus('news_check.creating_query'.tr());
-      final query = await extractSearchQuery(cleanedText);
-
-      // Step 3: Web search via Serper
+      // Step 2: Send to AWS for fact-checking (query extraction + search + classify)
       _setStatus(NewsCheckStatus.searching);
-      await PlatformChannel.updateAnalysisStatus('news_check.searching'.tr());
-      final sources = await webSearch(query);
-
-      // Step 4: LLM classification
-      _setStatus(NewsCheckStatus.classifying);
       await PlatformChannel.updateAnalysisStatus('news_check.analyzing'.tr());
-      final result = await classifyNews(cleanedText, sources);
+      final result = await factCheck(cleanedText);
 
       _result = result;
       _setStatus(NewsCheckStatus.done);
