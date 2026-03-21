@@ -3,7 +3,10 @@ package com.example.check_var
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.MediaPlayer
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -14,6 +17,8 @@ import android.util.Log
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileInputStream
 
 /**
  * Unified bridge that handles both:
@@ -48,6 +53,10 @@ class ServiceBridge private constructor() {
     private var speakerRoutingActive: Boolean = false
     private var previousSpeakerphoneState: Boolean? = null
     private var previousAudioMode: Int? = null
+
+    // ── Warning audio state ──────────────────────────────────────────────────
+    private var warningPlayer: MediaPlayer? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     // ── Live Caption capture state ──────────────────────────────────────────
     /** When true, the AccessibilityService forwards caption events. */
@@ -175,8 +184,15 @@ class ServiceBridge private constructor() {
                 result.success(granted)
             }
             "showOverlayBubble" -> {
+                val locale = call.argument<String>("locale") ?: "vi"
                 val intent = Intent(context, OverlayBubbleService::class.java)
+                intent.putExtra("locale", locale)
                 context.startService(intent)
+                result.success(true)
+            }
+            "updateOverlayLocale" -> {
+                val locale = call.argument<String>("locale") ?: "vi"
+                OverlayBubbleService.updateLocale(locale)
                 result.success(true)
             }
             "hideOverlayBubble" -> {
@@ -202,6 +218,26 @@ class ServiceBridge private constructor() {
                 tts?.stop()
                 restoreAudioRouting()
                 result.success(true)
+            }
+            // ── Warning Audio ─────────────────────────────────────────
+            "playWarningAudio" -> {
+                val bytes = call.argument<ByteArray>("bytes")
+                if (bytes != null) {
+                    playWarningFromBytes(bytes)
+                }
+                result.success(true)
+            }
+            "playWarningAsset" -> {
+                val assetPath = call.argument<String>("assetPath") ?: ""
+                playWarningFromAsset(assetPath)
+                result.success(true)
+            }
+            "stopWarningAudio" -> {
+                stopWarningAudio()
+                result.success(true)
+            }
+            "isWarningPlaying" -> {
+                result.success(warningPlayer?.isPlaying ?: false)
             }
             else -> result.notImplemented()
         }
@@ -473,5 +509,109 @@ class ServiceBridge private constructor() {
             .getLaunchIntentForPackage(context.packageName)
         launchIntent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         context.startActivity(launchIntent)
+    }
+
+    // ── Warning Audio ────────────────────────────────────────────────────────
+
+    private val warningAudioAttributes: AudioAttributes by lazy {
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+    }
+
+    private fun playWarningFromBytes(bytes: ByteArray) {
+        stopWarningAudio()
+        try {
+            val tmpFile = File(context.cacheDir, "warning_tmp.mp3")
+            tmpFile.writeBytes(bytes)
+
+            val player = MediaPlayer()
+            player.setAudioAttributes(warningAudioAttributes)
+            player.setDataSource(FileInputStream(tmpFile).fd)
+            player.setOnCompletionListener { onWarningDone() }
+            player.setOnErrorListener { _, _, _ -> onWarningDone(); true }
+            player.prepare()
+
+            requestWarningAudioFocus()
+            player.start()
+            warningPlayer = player
+
+            Log.d(TAG, "playWarningFromBytes: started, ${bytes.size} bytes")
+        } catch (e: Exception) {
+            Log.e(TAG, "playWarningFromBytes: error", e)
+            onWarningDone()
+        }
+    }
+
+    private fun playWarningFromAsset(assetPath: String) {
+        stopWarningAudio()
+        try {
+            val fd = context.assets.openFd("flutter_assets/$assetPath")
+
+            val player = MediaPlayer()
+            player.setAudioAttributes(warningAudioAttributes)
+            player.setDataSource(fd.fileDescriptor, fd.startOffset, fd.length)
+            fd.close()
+            player.setOnCompletionListener { onWarningDone() }
+            player.setOnErrorListener { _, _, _ -> onWarningDone(); true }
+            player.prepare()
+
+            requestWarningAudioFocus()
+            player.start()
+            warningPlayer = player
+
+            Log.d(TAG, "playWarningFromAsset: started '$assetPath'")
+        } catch (e: Exception) {
+            Log.e(TAG, "playWarningFromAsset: error for '$assetPath'", e)
+            onWarningDone()
+        }
+    }
+
+    private fun stopWarningAudio() {
+        warningPlayer?.let { player ->
+            try {
+                if (player.isPlaying) player.stop()
+                player.release()
+            } catch (_: Exception) {}
+        }
+        warningPlayer = null
+        abandonWarningAudioFocus()
+    }
+
+    private fun onWarningDone() {
+        mainHandler.post {
+            stopWarningAudio()
+            eventSink?.success(mapOf("type" to "warning_audio_done"))
+        }
+    }
+
+    private fun requestWarningAudioFocus() {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                .setAudioAttributes(warningAudioAttributes)
+                .build()
+            audioFocusRequest = request
+            audioManager.requestAudioFocus(request)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                null,
+                AudioManager.STREAM_VOICE_CALL,
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+            )
+        }
+    }
+
+    private fun abandonWarningAudioFocus() {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(null)
+        }
     }
 }

@@ -234,7 +234,7 @@ class HistoryDetailScreen extends StatelessWidget {
               if (entry.scamProbability != null) ...[
                 const SizedBox(height: 4),
                 Text(
-                  'Xác suất lừa đảo: ${(entry.scamProbability! * 100).round()}%',
+                  'call_detail.scam_probability'.tr(args: ['${(entry.scamProbability! * 100).round()}']),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: color.withValues(alpha: 0.8),
                       ),
@@ -383,7 +383,7 @@ class HistoryDetailScreen extends StatelessWidget {
               const Icon(Icons.phone_missed_rounded, size: 48, color: Colors.grey),
               const SizedBox(height: 12),
               Text(
-                'KHÔNG PHÂN TÍCH',
+                'call_history.not_analyzed'.tr().toUpperCase(),
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.grey,
@@ -391,7 +391,7 @@ class HistoryDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Chưa kích hoạt phát hiện lừa đảo',
+                'call_detail.not_activated'.tr(),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.grey,
                     ),

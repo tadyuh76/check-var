@@ -16,7 +16,13 @@
     "delete": "Xóa",
     "history_cleared": "Đã xóa lịch sử",
     "info": "Thông tin",
-    "version": "Phiên bản"
+    "version": "Phiên bản",
+    "scam_call": "Cuộc gọi lừa đảo"
+  },
+  "scam_audio": {
+    "tap_dismiss": "Chạm để tắt",
+    "setting_title": "Cảnh báo bằng giọng nói",
+    "setting_desc": "Phát cảnh báo bằng giọng nói khi phát hiện cuộc gọi lừa đảo"
   },
   "home": {
     "check_fake_news": "Kiểm tra\ntin giả",
@@ -127,6 +133,22 @@
     "no_abnormal": "Không phát hiện dấu hiệu bất thường",
     "not_analyzed": "Không phân tích",
     "unknown_number": "Số không xác định"
+  },
+  "overlay": {
+    "scam_caption": "LỪA ĐẢO",
+    "suspicious_caption": "Đáng ngờ",
+    "error_caption": "Lỗi",
+    "scam_title": "LỪA ĐẢO!",
+    "scam_subtitle": "Hãy cúp máy ngay",
+    "suspicious_title": "Đáng ngờ",
+    "suspicious_subtitle": "Có dấu hiệu lừa đảo",
+    "safe_title": "An toàn",
+    "safe_subtitle": "Cuộc gọi bình thường",
+    "hint": "Số lạ? Nhấn để kiểm tra lừa đảo"
+  },
+  "call_detail": {
+    "scam_probability": "Xác suất lừa đảo: {}%",
+    "not_activated": "Chưa kích hoạt phát hiện lừa đảo"
   },
   "notification": {
     "analyzing": "Đang phân tích nội dung...",

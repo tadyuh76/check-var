@@ -1,0 +1,170 @@
+{
+  "safe": {
+    "vi": "Cuộc gọi bình thường, không có dấu hiệu lừa đảo.",
+    "en": "Normal call, no signs of fraud detected."
+  },
+  "aiFlashCall": {
+    "vi": "Không gọi lại số lạ. Đây có thể là bẫy thu phí.",
+    "en": "Do not call back unknown numbers. This may be a toll trap."
+  },
+  "deepfakeVideoCall": {
+    "vi": "Không tin video call từ người lạ. Xác minh bằng cách khác.",
+    "en": "Do not trust video calls from strangers. Verify through other means."
+  },
+  "deepfakeVoiceClone": {
+    "vi": "Giọng nói có thể bị giả mạo bằng AI. Gọi lại số chính thức để xác minh.",
+    "en": "Voices can be cloned by AI. Call back the official number to verify."
+  },
+  "bankCardUpgrade": {
+    "vi": "Ngân hàng không yêu cầu thông tin thẻ qua điện thoại. Gọi lại hotline chính thức.",
+    "en": "Banks never ask for card details over the phone. Call the official hotline."
+  },
+  "bankFraudAlert": {
+    "vi": "Không cung cấp OTP hoặc thông tin thẻ. Gọi lại hotline ngân hàng chính thức.",
+    "en": "Never share OTP or card information. Call your bank's official hotline."
+  },
+  "ewalletScam": {
+    "vi": "Không chuyển tiền hoặc cung cấp mã OTP cho người lạ.",
+    "en": "Do not transfer money or share OTP codes with strangers."
+  },
+  "customsOfficial": {
+    "vi": "Hải quan không yêu cầu đóng phí qua điện thoại. Xác minh tại cơ quan.",
+    "en": "Customs never require payment over the phone. Verify at the office."
+  },
+  "governmentOrderFake": {
+    "vi": "Cơ quan nhà nước không gửi lệnh qua điện thoại. Xác minh trực tiếp.",
+    "en": "Government agencies do not issue orders over the phone. Verify in person."
+  },
+  "policeImpersonation": {
+    "vi": "Công an không bao giờ yêu cầu chuyển tiền qua điện thoại. Cúp máy ngay.",
+    "en": "Police never ask for money transfers over the phone. Hang up immediately."
+  },
+  "prosecutorCourt": {
+    "vi": "Tòa án triệu tập bằng giấy, không qua điện thoại. Cúp máy.",
+    "en": "Courts issue summons in writing, not over the phone. Hang up."
+  },
+  "taxAuthority": {
+    "vi": "Cơ quan thuế không yêu cầu chuyển tiền qua điện thoại. Kiểm tra tại chi cục thuế.",
+    "en": "Tax authorities never request money transfers by phone. Check at the tax office."
+  },
+  "socialInsurance": {
+    "vi": "BHXH không yêu cầu đóng phí qua điện thoại. Liên hệ trực tiếp cơ quan BHXH.",
+    "en": "Social insurance never requires payment by phone. Contact the office directly."
+  },
+  "fakeShipper": {
+    "vi": "Không đóng phí qua điện thoại. Liên hệ trực tiếp đơn vị vận chuyển.",
+    "en": "Do not pay fees over the phone. Contact the shipping company directly."
+  },
+  "giftPackage": {
+    "vi": "Không nhận quà từ người lạ. Đây có thể là chiêu lừa đảo.",
+    "en": "Do not accept gifts from strangers. This could be a scam tactic."
+  },
+  "investmentScam": {
+    "vi": "Không có khoản đầu tư nào cam kết lợi nhuận cao, rủi ro thấp. Từ chối.",
+    "en": "No investment guarantees high returns with low risk. Decline."
+  },
+  "mergeExploit": {
+    "vi": "Không chuyển tiền cho đối tác chưa xác minh. Tìm hiểu kỹ.",
+    "en": "Do not transfer money to unverified partners. Investigate thoroughly."
+  },
+  "fakeLoan": {
+    "vi": "Không đóng phí trước khi nhận khoản vay. Đây là dấu hiệu lừa đảo.",
+    "en": "Never pay fees before receiving a loan. This is a sign of fraud."
+  },
+  "salaryAdvance": {
+    "vi": "Không cung cấp thông tin tài khoản. Xác minh với công ty trực tiếp.",
+    "en": "Do not share account information. Verify directly with the company."
+  },
+  "prizeLottery": {
+    "vi": "Không có giải thưởng thật nào yêu cầu đóng phí trước. Bỏ qua.",
+    "en": "No real prize requires upfront payment. Ignore it."
+  },
+  "lotteryNumbers": {
+    "vi": "Không ai có thể dự đoán chính xác số lô đề. Đừng tin.",
+    "en": "Nobody can accurately predict lottery numbers. Do not believe them."
+  },
+  "kidnapRansom": {
+    "vi": "Giữ bình tĩnh. Gọi trực tiếp cho người thân để xác nhận. Báo công an.",
+    "en": "Stay calm. Call your family member directly to confirm. Report to police."
+  },
+  "imageExtortion": {
+    "vi": "Không chuyển tiền. Báo công an ngay. Giữ bằng chứng.",
+    "en": "Do not transfer money. Report to police immediately. Keep evidence."
+  },
+  "fakeAppInstall": {
+    "vi": "Không cài ứng dụng lạ hoặc cung cấp mật khẩu. Cúp máy ngay.",
+    "en": "Do not install unknown apps or share passwords. Hang up immediately."
+  },
+  "romanceExtortion": {
+    "vi": "Không chuyển tiền cho người chưa gặp mặt ngoài đời. Cẩn thận.",
+    "en": "Do not send money to someone you have never met in person. Be careful."
+  },
+  "romanceInvest": {
+    "vi": "Không đầu tư theo hướng dẫn của người quen online. Đây là bẫy.",
+    "en": "Do not invest based on advice from online acquaintances. It is a trap."
+  },
+  "sugarDating": {
+    "vi": "Không chuyển tiền cho người hẹn hò online. Đây là lừa đảo.",
+    "en": "Do not send money to online dates. This is a scam."
+  },
+  "jobScamDeposit": {
+    "vi": "Không đóng phí tuyển dụng. Công ty uy tín không thu phí.",
+    "en": "Do not pay recruitment fees. Reputable companies do not charge fees."
+  },
+  "jobScamTask": {
+    "vi": "Không làm nhiệm vụ trả tiền online. Đây là bẫy lừa đảo.",
+    "en": "Do not do paid online tasks. This is a fraud trap."
+  },
+  "electricityWater": {
+    "vi": "Liên hệ trực tiếp công ty điện/nước. Không đóng phí qua điện thoại.",
+    "en": "Contact the utility company directly. Do not pay over the phone."
+  },
+  "telecomDebt": {
+    "vi": "Gọi lại tổng đài chính thức của nhà mạng để xác minh.",
+    "en": "Call the official carrier hotline to verify."
+  },
+  "telecomSimUpgrade": {
+    "vi": "Không cung cấp mã OTP. Đến trực tiếp cửa hàng nhà mạng.",
+    "en": "Do not share OTP codes. Visit the carrier store in person."
+  },
+  "fakeFriendBorrow": {
+    "vi": "Gọi lại trực tiếp cho bạn bè để xác minh. Đừng vội chuyển tiền.",
+    "en": "Call your friend directly to verify. Do not rush to send money."
+  },
+  "relativeEmergency": {
+    "vi": "Gọi trực tiếp cho người thân. Đây là chiêu lừa phổ biến.",
+    "en": "Call your relative directly. This is a common scam tactic."
+  },
+  "scholarshipFake": {
+    "vi": "Không đóng phí để nhận học bổng. Xác minh tại trường.",
+    "en": "Do not pay fees for scholarships. Verify with the school."
+  },
+  "tuitionRefund": {
+    "vi": "Không cung cấp thông tin tài khoản. Xác minh tại trường.",
+    "en": "Do not share account information. Verify with the school."
+  },
+  "charityDisaster": {
+    "vi": "Chỉ quyên góp qua tổ chức uy tín có xác minh.",
+    "en": "Only donate through verified reputable organizations."
+  },
+  "debtCollectionFake": {
+    "vi": "Không chuyển tiền cho người lạ tự xưng đòi nợ. Xác minh.",
+    "en": "Do not pay strangers claiming to collect debts. Verify first."
+  },
+  "fireSafetyScam": {
+    "vi": "PCCC không yêu cầu đóng phí qua điện thoại. Xác minh.",
+    "en": "Fire safety authorities do not require payment by phone. Verify."
+  },
+  "medicalScam": {
+    "vi": "Không mua thuốc hoặc dịch vụ y tế qua điện thoại người lạ.",
+    "en": "Do not buy medicine or medical services over the phone from strangers."
+  },
+  "vehicleRegistration": {
+    "vi": "Không đóng phí đăng ký xe qua điện thoại. Đến trực tiếp cơ quan.",
+    "en": "Do not pay vehicle registration fees by phone. Visit the office in person."
+  },
+  "unknown": {
+    "vi": "Cuộc gọi có dấu hiệu lừa đảo. Hãy cúp máy và xác minh.",
+    "en": "This call shows signs of fraud. Hang up and verify."
+  }
+}

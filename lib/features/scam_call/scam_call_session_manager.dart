@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 
@@ -160,10 +161,18 @@ class ScamCallSessionManager extends ChangeNotifier {
 
   static ScamCallController _buildLiveCallController() {
     return ScamCallController(
-      onOverlayShow: PlatformChannel.showOverlayBubble,
+      onOverlayShow: () => PlatformChannel.showOverlayBubble(
+            locale: _currentLocale),
       onOverlayHide: PlatformChannel.hideOverlayBubble,
       onOverlayStatusUpdate: _updateOverlayStatus,
+      locale: _currentLocale,
     );
+  }
+
+  static String get _currentLocale {
+    final code =
+        ui.PlatformDispatcher.instance.locale.languageCode;
+    return (code == 'en') ? 'en' : 'vi';
   }
 
   static ScamCallController _buildSimulationController(
@@ -171,9 +180,11 @@ class ScamCallSessionManager extends ChangeNotifier {
   ) {
     return ScamCallController(
       transcriptGateway: buildSimulationTranscriptGateway(),
-      onOverlayShow: PlatformChannel.showOverlayBubble,
+      onOverlayShow: () => PlatformChannel.showOverlayBubble(
+            locale: _currentLocale),
       onOverlayHide: PlatformChannel.hideOverlayBubble,
       onOverlayStatusUpdate: _updateOverlayStatus,
+      locale: _currentLocale,
     );
   }
 

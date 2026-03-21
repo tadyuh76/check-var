@@ -192,7 +192,8 @@ class _AppShellState extends State<AppShell> {
 
     debugPrint('AppShell: call started — showing overlay reminder');
     try {
-      await core_channel.PlatformChannel.showOverlayBubble();
+      await core_channel.PlatformChannel.showOverlayBubble(
+          locale: context.locale.languageCode);
     } catch (e) {
       debugPrint('AppShell: failed to show overlay bubble: $e');
     }

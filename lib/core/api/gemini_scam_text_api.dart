@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../config/api_keys.dart';
 import '../../models/scam_alert.dart';
+import 'local_scam_classifier.dart' show ScamType;
 
 abstract interface class ScamTextClassifier {
   Future<ScamAnalysisResult> classifyTranscriptWindow(String transcript);
@@ -17,6 +18,7 @@ class ScamAnalysisResult {
     required this.summary,
     required this.advice,
     this.scamProbability = 0.0,
+    this.scamType,
   });
 
   final ThreatLevel threatLevel;
@@ -29,6 +31,9 @@ class ScamAnalysisResult {
   /// (higher = more likely scam).  Unlike [confidence], which inverts for
   /// safe results, this value is always directly comparable across analyses.
   final double scamProbability;
+
+  /// The specific scam subtype detected by the classifier, if any.
+  final ScamType? scamType;
 
   ScamAlert toAlert() {
     return ScamAlert(

@@ -8,15 +8,25 @@ import 'package:check_var/models/call_result.dart' hide ThreatLevel;
 import 'package:check_var/models/scam_alert.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
+    SharedPreferences.setMockInitialValues({});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('com.checkvar/service'),
       (call) async => null,
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+      const EventChannel('com.checkvar/events'),
+      MockStreamHandler.inline(
+        onListen: (args, sink) {},
+        onCancel: (args) {},
+      ),
     );
   });
 
@@ -24,6 +34,11 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('com.checkvar/service'),
+      null,
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+      const EventChannel('com.checkvar/events'),
       null,
     );
   });

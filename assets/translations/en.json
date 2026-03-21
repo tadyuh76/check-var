@@ -16,7 +16,13 @@
     "delete": "Delete",
     "history_cleared": "History cleared",
     "info": "Information",
-    "version": "Version"
+    "version": "Version",
+    "scam_call": "Scam Calls"
+  },
+  "scam_audio": {
+    "tap_dismiss": "Tap to dismiss",
+    "setting_title": "Voice scam warning",
+    "setting_desc": "Play voice warnings when scam calls are detected"
   },
   "home": {
     "check_fake_news": "Check\nfake news",
@@ -127,6 +133,22 @@
     "no_abnormal": "No abnormal signs detected",
     "not_analyzed": "Not analyzed",
     "unknown_number": "Unknown number"
+  },
+  "overlay": {
+    "scam_caption": "SCAM",
+    "suspicious_caption": "Suspicious",
+    "error_caption": "Error",
+    "scam_title": "SCAM!",
+    "scam_subtitle": "Hang up now",
+    "suspicious_title": "Suspicious",
+    "suspicious_subtitle": "Scam indicators detected",
+    "safe_title": "Safe",
+    "safe_subtitle": "Normal call",
+    "hint": "Unknown number? Tap to check for scams"
+  },
+  "call_detail": {
+    "scam_probability": "Scam probability: {}%",
+    "not_activated": "Scam detection not activated"
   },
   "notification": {
     "analyzing": "Analyzing content...",

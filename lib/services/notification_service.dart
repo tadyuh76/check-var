@@ -95,13 +95,13 @@ class NotificationService {
   // --- Scam call notification support ---
 
   static String buildScamCallTitle(CallResult result) {
-    final verdictVn = switch (result.threatLevel) {
-      ThreatLevel.safe => 'An toàn',
-      ThreatLevel.suspicious => 'Đáng ngờ',
-      ThreatLevel.scam => 'Lừa đảo',
+    final verdict = switch (result.threatLevel) {
+      ThreatLevel.safe => 'threat.safe'.tr(),
+      ThreatLevel.suspicious => 'threat.suspicious'.tr(),
+      ThreatLevel.scam => 'threat.scam'.tr(),
     };
     final confidence = (result.confidence * 100).round();
-    return 'CheckVar: $verdictVn ($confidence%)';
+    return 'CheckVar: $verdict ($confidence%)';
   }
 
   static String? buildScamCallBody(CallResult result) {

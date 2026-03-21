@@ -114,8 +114,9 @@ class PlatformChannel {
   }
 
   /// Show the overlay bubble (indicates scam detector is active).
-  static Future<void> showOverlayBubble() async {
-    await _methodChannel.invokeMethod('showOverlayBubble');
+  static Future<void> showOverlayBubble({String locale = 'vi'}) async {
+    await _methodChannel
+        .invokeMethod('showOverlayBubble', {'locale': locale});
   }
 
   /// Hide the overlay bubble.
@@ -152,5 +153,33 @@ class PlatformChannel {
   /// Stop any in-progress TTS playback.
   static Future<void> stopSpeaking() async {
     await _methodChannel.invokeMethod('stopSpeaking');
+  }
+
+  // ── Warning Audio ───────────────────────────────────────────────────────
+
+  /// Play MP3 [bytes] through the earpiece (caller cannot hear).
+  static Future<void> playWarningAudio(Uint8List bytes) async {
+    await _methodChannel.invokeMethod('playWarningAudio', {
+      'bytes': bytes,
+    });
+  }
+
+  /// Play a bundled asset MP3 through the earpiece.
+  static Future<void> playWarningAsset(String assetPath) async {
+    await _methodChannel.invokeMethod('playWarningAsset', {
+      'assetPath': assetPath,
+    });
+  }
+
+  /// Stop the currently playing warning audio.
+  static Future<void> stopWarningAudio() async {
+    await _methodChannel.invokeMethod('stopWarningAudio');
+  }
+
+  /// Check if a warning is currently playing.
+  static Future<bool> isWarningPlaying() async {
+    final result =
+        await _methodChannel.invokeMethod<bool>('isWarningPlaying');
+    return result ?? false;
   }
 }

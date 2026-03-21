@@ -8,6 +8,7 @@ import '../../core/api/local_scam_classifier.dart';
 import '../../core/platform_channel.dart';
 import '../../models/call_result.dart' as call_result;
 import '../../models/scam_alert.dart';
+import '../../services/scam_audio_warning_service.dart';
 import 'live/scam_call_transcript_gateway.dart';
 import 'live/live_caption_transcript_gateway.dart';
 import 'live/live_transcript_models.dart';
@@ -34,6 +35,8 @@ class ScamCallController extends ChangeNotifier {
   ScamCallController({
     ScamCallTranscriptGateway? transcriptGateway,
     ScamTextClassifier? classifier,
+    ScamAudioWarningService? audioWarningService,
+    this.locale = 'vi',
     this.onOverlayShow,
     this.onOverlayHide,
     this.onOverlayTranscriptUpdate,
@@ -43,7 +46,9 @@ class ScamCallController extends ChangeNotifier {
     this.sessionRefreshInterval = const Duration(minutes: 13),
   }) : _transcriptGateway =
            transcriptGateway ?? _buildDefaultTranscriptGateway(),
-       _classifier = classifier ?? LocalScamClassifier();
+       _classifier = classifier ?? LocalScamClassifier(),
+       _audioWarningService =
+           audioWarningService ?? ScamAudioWarningService();
 
   static ScamCallTranscriptGateway _buildDefaultTranscriptGateway() {
     return LiveCaptionTranscriptGateway();
@@ -51,6 +56,8 @@ class ScamCallController extends ChangeNotifier {
 
   final ScamCallTranscriptGateway _transcriptGateway;
   final ScamTextClassifier _classifier;
+  final ScamAudioWarningService _audioWarningService;
+  final String locale;
   final OverlayVisibilityCallback? onOverlayShow;
   final OverlayVisibilityCallback? onOverlayHide;
   final OverlayTranscriptCallback? onOverlayTranscriptUpdate;
@@ -166,6 +173,8 @@ class ScamCallController extends ChangeNotifier {
       // Ensure overlay permission is granted before starting.
       await PlatformChannel.requestOverlayPermission();
 
+      _audioWarningService.startSession();
+
       await _transcriptSub?.cancel();
       _transcriptSub = _transcriptGateway.transcripts.listen(_handleLiveEvent);
       await _transcriptGateway.start();
@@ -185,6 +194,7 @@ class ScamCallController extends ChangeNotifier {
   }
 
   Future<void> stopListening() async {
+    _audioWarningService.stopSession();
     _analysisTimer?.cancel();
     _analysisTimer = null;
     _maxWaitTimer?.cancel();
@@ -365,6 +375,9 @@ class ScamCallController extends ChangeNotifier {
       ..._patterns,
       ...result.patterns.where((pattern) => pattern.trim().isNotEmpty),
     }.toList();
+
+    // Trigger audio warning (fire-and-forget — service handles all guards)
+    unawaited(_audioWarningService.onAnalysisResult(result, locale));
 
     unawaited(_publishOverlayStatus());
   }

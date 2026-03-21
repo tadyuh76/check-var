@@ -43,6 +43,39 @@ class OverlayBubbleService : Service() {
         fun updateStatus(sessionStatus: String, threatLevel: String, confidence: Int = -1) {
             instance?.applyStatus(sessionStatus, threatLevel, confidence)
         }
+
+        fun updateLocale(locale: String) {
+            instance?.setLocale(locale)
+        }
+
+        private val strings = mapOf(
+            "en" to mapOf(
+                "scam_caption" to "SCAM",
+                "suspicious_caption" to "Suspicious",
+                "error_caption" to "Error",
+                "scam_title" to "SCAM!",
+                "scam_subtitle" to "Hang up now",
+                "suspicious_title" to "Suspicious",
+                "suspicious_subtitle" to "Scam indicators detected",
+                "safe_title" to "Safe",
+                "safe_subtitle" to "Normal call",
+                "hint" to "Unknown number? Tap to check for scams",
+                "listening" to "Listening"
+            ),
+            "vi" to mapOf(
+                "scam_caption" to "LỪA ĐẢO",
+                "suspicious_caption" to "Đáng ngờ",
+                "error_caption" to "Lỗi",
+                "scam_title" to "LỪA ĐẢO!",
+                "scam_subtitle" to "Hãy cúp máy ngay",
+                "suspicious_title" to "Đáng ngờ",
+                "suspicious_subtitle" to "Có dấu hiệu lừa đảo",
+                "safe_title" to "An toàn",
+                "safe_subtitle" to "Cuộc gọi bình thường",
+                "hint" to "Số lạ? Nhấn để kiểm tra lừa đảo",
+                "listening" to "Đang nghe"
+            )
+        )
     }
 
     // ── State ────────────────────────────────────────────────────────────────
@@ -55,6 +88,15 @@ class OverlayBubbleService : Service() {
     private var threatLevel = "safe"
     private var confidence = -1
     private var isExpanded = false
+    private var currentLocale = "vi"
+
+    private fun s(key: String): String =
+        strings[currentLocale]?.get(key) ?: strings["vi"]!![key]!!
+
+    private fun setLocale(locale: String) {
+        currentLocale = if (strings.containsKey(locale)) locale else "vi"
+        if (isExpanded) styleExpanded() else styleCollapsed()
+    }
 
     /** Tracks which threat level was last expanded for.
      *  Prevents re-expanding on every status update for the same threat. */
@@ -146,6 +188,13 @@ class OverlayBubbleService : Service() {
         rootView = null
         instance = null
         super.onDestroy()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        intent?.getStringExtra("locale")?.let { locale ->
+            currentLocale = if (strings.containsKey(locale)) locale else "vi"
+        }
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -412,19 +461,19 @@ class OverlayBubbleService : Service() {
             threatLevel == "scam" -> {
                 circle.background = ovalFill(C_SCAM)
                 bubbleLabel?.text = "!!"
-                showCaption("LỪA ĐẢO")
+                showCaption(s("scam_caption"))
                 startPulse(C_SCAM)
             }
             threatLevel == "suspicious" -> {
                 circle.background = ovalFill(C_SUSPICIOUS)
                 bubbleLabel?.text = "!?"
-                showCaption("Đáng ngờ")
+                showCaption(s("suspicious_caption"))
                 startPulse(C_SUSPICIOUS)
             }
             sessionStatus == "error" -> {
                 circle.background = ovalFill(C_ERROR)
                 bubbleLabel?.text = "✕"
-                showCaption("Lỗi")
+                showCaption(s("error_caption"))
                 stopPulse()
             }
             sessionStatus == "reconnecting" -> {
@@ -442,7 +491,7 @@ class OverlayBubbleService : Service() {
             sessionStatus == "listening" -> {
                 circle.background = ovalGradient(LISTEN_COLORS)
                 bubbleLabel?.text = "🎧"
-                showCaption("Đang nghe")
+                showCaption(s("listening"))
                 startPulse(0xFF00897B.toInt())
             }
             else -> { // idle / connecting
@@ -493,29 +542,29 @@ class OverlayBubbleService : Service() {
             "scam" -> {
                 expandedIconLabel?.apply { text = "✕"; setTextColor(color) }
                 expandedTitle?.apply {
-                    text = "LỪA ĐẢO!"
+                    text = s("scam_title")
                     setTextColor(color)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 }
-                expandedSubtitle?.text = "Hãy cúp máy ngay"
+                expandedSubtitle?.text = s("scam_subtitle")
             }
             "suspicious" -> {
                 expandedIconLabel?.apply { text = "⚠"; setTextColor(color) }
                 expandedTitle?.apply {
-                    text = "Đáng ngờ"
+                    text = s("suspicious_title")
                     setTextColor(color)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 }
-                expandedSubtitle?.text = "Có dấu hiệu lừa đảo"
+                expandedSubtitle?.text = s("suspicious_subtitle")
             }
             else -> {
                 expandedIconLabel?.apply { text = "✓"; setTextColor(color) }
                 expandedTitle?.apply {
-                    text = "An toàn"
+                    text = s("safe_title")
                     setTextColor(color)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 }
-                expandedSubtitle?.text = "Cuộc gọi bình thường"
+                expandedSubtitle?.text = s("safe_subtitle")
             }
         }
 
@@ -597,7 +646,7 @@ class OverlayBubbleService : Service() {
 
     private fun showInitialHint() {
         val hint = TextView(this).apply {
-            text = "Số lạ? Nhấn để kiểm tra lừa đảo"
+            text = s("hint")
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             setTextColor(0xFF3E3E3E.toInt())
             setTypeface(null, Typeface.NORMAL)

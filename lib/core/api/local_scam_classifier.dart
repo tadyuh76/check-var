@@ -473,6 +473,7 @@ class LocalScamClassifier implements ScamTextClassifier {
       patterns: [scamType.displayName],
       summary: scamType.displayName,
       advice: scamType.advice,
+      scamType: scamType,
     );
   }
 
