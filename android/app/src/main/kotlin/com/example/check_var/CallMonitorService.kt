@@ -96,13 +96,6 @@ class CallMonitorService : Service() {
                 return
             }
 
-            // Incoming call from known contact: suppress.
-            val callerType = ServiceBridge.instance.lastCallerType
-            if (callerType == CallerIdentityResolver.CallerType.KNOWN_CONTACT) {
-                android.util.Log.d("CallMonitor", "OFFHOOK: known contact — suppressing scam detection")
-                return
-            }
-
             val event = EventPayloadBuilder.buildCallActiveEvent(
                 isActive,
                 callerDisplayText = ServiceBridge.instance.lastCallerDisplayText,
