@@ -31,14 +31,14 @@ class ScamAudioWarningService {
   static const settingsKey = 'scam_audio_warning_enabled';
 
   // ── Trigger thresholds ─────────────────────────────────────────────
-  static const _minCallDuration = Duration(seconds: 10);
-  static const _requiredConsecutiveScam = 3;
-  static const _cooldown = Duration(seconds: 30);
+  // DEMO MODE: fire 3s after the first scam popup appears
+  static const _delayAfterScamPopup = Duration(seconds: 3);
 
   final ElevenLabsTtsService _ttsService;
 
   // ── Session state ──────────────────────────────────────────────────
   DateTime? _sessionStartTime;
+  DateTime? _firstScamPopupTime;
   int _consecutiveScamCount = 0;
   bool _hasPlayedInitialAlert = false;
   ScamType? _lastWarnedScamType;
@@ -58,6 +58,7 @@ class ScamAudioWarningService {
   void startSession() {
     _sessionStartTime = DateTime.now();
     _consecutiveScamCount = 0;
+    _firstScamPopupTime = null;
     _hasPlayedInitialAlert = false;
     _lastWarnedScamType = null;
     _lastWarningTime = null;
@@ -92,34 +93,23 @@ class ScamAudioWarningService {
   /// The service internally decides whether to trigger a warning.
   Future<void> onAnalysisResult(
     ScamAnalysisResult result,
-    String locale,
-  ) async {
-    final elapsedTime = _sessionStartTime != null
-        ? DateTime.now().difference(_sessionStartTime!)
-        : Duration.zero;
+    String locale, {
+    ThreatLevel? effectiveThreat,
+  }) async {
+    final threat = effectiveThreat ?? result.threatLevel;
+
     // Check if audio warnings are enabled
     final prefs = await SharedPreferences.getInstance();
     if (!(prefs.getBool(settingsKey) ?? true)) return;
 
-    // Update consecutive scam count
-    if (result.threatLevel == ThreatLevel.scam) {
-      _consecutiveScamCount++;
-    } else {
-      _consecutiveScamCount = (_consecutiveScamCount - 1).clamp(0, 999);
-      return; // Only trigger on scam
-    }
+    // DEMO MODE: fire 3s after the scam popup first appears
+    if (threat != ThreatLevel.scam) return;
 
-    // Guard: minimum call duration
-    if (elapsedTime < _minCallDuration) return;
+    // Record when the scam popup first appeared
+    _firstScamPopupTime ??= DateTime.now();
 
-    // Guard: consecutive scam count
-    if (_consecutiveScamCount < _requiredConsecutiveScam) return;
-
-    // Guard: cooldown
-    if (_lastWarningTime != null) {
-      final sinceLastWarning = DateTime.now().difference(_lastWarningTime!);
-      if (sinceLastWarning < _cooldown) return;
-    }
+    final sincePopup = DateTime.now().difference(_firstScamPopupTime!);
+    if (sincePopup < _delayAfterScamPopup) return;
 
     // Guard: don't interrupt a playing warning
     if (_isPlaying) return;
@@ -128,8 +118,7 @@ class ScamAudioWarningService {
     _lastWarningTime = DateTime.now();
     _warningCount++;
     debugPrint('[ScamAudioWarning] Triggering warning #$_warningCount '
-        '(consecutive=$_consecutiveScamCount, '
-        'elapsed=${elapsedTime.inSeconds}s, '
+        '(sincePopup=${sincePopup.inSeconds}s, '
         'scamType=${result.scamType?.name})');
 
     await _playWarningSequence(result, locale);

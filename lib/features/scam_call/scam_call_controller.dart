@@ -343,17 +343,8 @@ class ScamCallController extends ChangeNotifier {
       _consecutiveNonSafe++;
     }
 
-    // ── Determine effective threat level from EMA + consecutive gate ─
-    final ThreatLevel effectiveThreat;
-    if (_emaScamProb < 0.50) {
-      effectiveThreat = ThreatLevel.safe;
-    } else if (_consecutiveNonSafe < 2) {
-      effectiveThreat = ThreatLevel.safe; // still gathering signal
-    } else if (_emaScamProb < 0.55) {
-      effectiveThreat = ThreatLevel.suspicious;
-    } else {
-      effectiveThreat = ThreatLevel.scam;
-    }
+    // ── DEMO MODE: use raw threat level directly (no EMA gating) ────
+    final effectiveThreat = result.threatLevel;
 
     _threatLevel = effectiveThreat;
     _confidence = _emaScamProb;
@@ -377,7 +368,11 @@ class ScamCallController extends ChangeNotifier {
     }.toList();
 
     // Trigger audio warning (fire-and-forget — service handles all guards)
-    unawaited(_audioWarningService.onAnalysisResult(result, locale));
+    unawaited(_audioWarningService.onAnalysisResult(
+      result,
+      locale,
+      effectiveThreat: effectiveThreat,
+    ));
 
     unawaited(_publishOverlayStatus());
   }
