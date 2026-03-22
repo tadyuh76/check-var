@@ -79,6 +79,7 @@
     "label": "Độ tin cậy",
     "level": "Độ tin cậy: {}%"
   },
+  "ai_disclaimer": "AI có thể mắc lỗi",
   "news_check": {
     "result_title": "Kết quả kiểm tra",
     "no_data": "Không có dữ liệu",
@@ -158,5 +159,9 @@
     "uncertain": "Chưa rõ",
     "channel_results": "Kết quả kiểm tra",
     "channel_desc": "Thông báo kết quả kiểm tra tin tức"
+  },
+  "service": {
+    "active_title": "CheckVar đang hoạt động",
+    "active_body": "Lắc điện thoại 3 lần để kiểm tra tin tức"
   }
 }

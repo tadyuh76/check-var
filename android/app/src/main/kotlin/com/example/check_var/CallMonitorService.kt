@@ -24,6 +24,7 @@ class CallMonitorService : Service() {
     private var telephonyManager: TelephonyManager? = null
     private var telephonyCallback: TelephonyCallback? = null
     private val executor = Executors.newSingleThreadExecutor()
+    private var wasRinging = false  // true = incoming call, false = outgoing
 
     override fun onCreate() {
         super.onCreate()
@@ -76,8 +77,9 @@ class CallMonitorService : Service() {
         val isActive = CallMonitorPolicy.isCallActive(state)
         android.util.Log.d("CallMonitor", "handleCallState: state=$state, isActive=$isActive")
 
-        // ── RINGING: read dialer to identify caller ──────────────
+        // ── RINGING: incoming call — read dialer to identify caller ──
         if (state == android.telephony.TelephonyManager.CALL_STATE_RINGING) {
+            wasRinging = true
             val a11y = CheckVarAccessibilityService.instance
             val dialerText = a11y?.readDialerCallerInfo()
             val callerType = CallerIdentityResolver.resolve(dialerText)
@@ -85,11 +87,12 @@ class CallMonitorService : Service() {
             android.util.Log.d("CallMonitor", "RINGING: dialerText='${dialerText?.take(40)}', callerType=$callerType")
         }
 
-        // ── OFFHOOK: gate on caller type ─────────────────────────
+        // ── OFFHOOK: gate on call direction + caller type ────────
         if (isActive) {
-            val callerType = ServiceBridge.instance.lastCallerType
-            if (callerType == CallerIdentityResolver.CallerType.KNOWN_CONTACT) {
-                android.util.Log.d("CallMonitor", "OFFHOOK: known contact — suppressing scam detection")
+            // Outgoing call: IDLE → OFFHOOK (no RINGING). Suppress scam detection
+            // since the user initiated the call.
+            if (!wasRinging) {
+                android.util.Log.d("CallMonitor", "OFFHOOK: outgoing call — suppressing scam detection")
                 return
             }
 
@@ -115,6 +118,7 @@ class CallMonitorService : Service() {
         // but resetting on RINGING would wipe the cache we just set above,
         // making the feature silently never work.
         if (state == android.telephony.TelephonyManager.CALL_STATE_IDLE) {
+            wasRinging = false
             ServiceBridge.instance.resetCallerType()
         }
         if (CallMonitorPolicy.shouldHideOverlay(state)) {

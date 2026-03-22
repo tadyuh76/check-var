@@ -45,13 +45,16 @@ class AnalysisOverlayService : Service() {
             mainHandler.post { instance?.setStatus(statusText) }
         }
 
-        fun showResult(verdict: String, verdictLabel: String, confidence: String, summary: String, detailLabel: String) {
-            mainHandler.post { instance?.setResult(verdict, verdictLabel, confidence, summary, detailLabel) }
+        fun showResult(verdict: String, verdictLabel: String, confidence: String, summary: String, detailLabel: String, disclaimerLabel: String) {
+            mainHandler.post { instance?.setResult(verdict, verdictLabel, confidence, summary, detailLabel, disclaimerLabel) }
         }
 
         fun showError(message: String, errorLabel: String = "Error", closeLabel: String = "Close") {
             mainHandler.post { instance?.setError(message, errorLabel, closeLabel) }
         }
+
+        /** Set by Flutter via setDarkMode — follows the app's theme, not system. */
+        var appDarkMode: Boolean = false
     }
 
     private var windowManager: WindowManager? = null
@@ -64,7 +67,6 @@ class AnalysisOverlayService : Service() {
 
     // Result
     private var resultOverlay: View? = null
-    private var scrimView: View? = null
 
     private var autoDismissRunnable: Runnable? = null
     private var safetyTimeoutRunnable: Runnable? = null
@@ -109,6 +111,8 @@ class AnalysisOverlayService : Service() {
 
     private fun screenHeight(): Int = resources.displayMetrics.heightPixels
 
+    private fun isDarkMode(): Boolean = appDarkMode
+
     private fun overlayType(): Int =
         if (CheckVarAccessibilityService.instance != null)
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
@@ -118,6 +122,11 @@ class AnalysisOverlayService : Service() {
     // ── Loading ──────────────────────────────────────────────────────────
 
     private fun showLoading() {
+        val dark = isDarkMode()
+        val cardBg = if (dark) Color.parseColor("#1A1A1A") else Color.WHITE
+        val titleColor = if (dark) Color.parseColor("#EEEEEE") else Color.parseColor("#111111")
+        val subtitleColor = if (dark) Color.parseColor("#888888") else Color.parseColor("#999999")
+
         val root = FrameLayout(this).apply {
             clipChildren = false
             clipToPadding = false
@@ -129,7 +138,7 @@ class AnalysisOverlayService : Service() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             background = GradientDrawable().apply {
-                setColor(Color.WHITE)
+                setColor(cardBg)
                 cornerRadius = dp(28).toFloat()
             }
             elevation = dp(8).toFloat()
@@ -163,7 +172,7 @@ class AnalysisOverlayService : Service() {
         card.addView(TextView(this).apply {
             text = "CheckVar"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            setTextColor(Color.parseColor("#111111"))
+            setTextColor(titleColor)
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
@@ -176,7 +185,7 @@ class AnalysisOverlayService : Service() {
         statusText = TextView(this).apply {
             text = pendingInitialStatus ?: ""
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setTextColor(Color.parseColor("#999999"))
+            setTextColor(subtitleColor)
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -266,7 +275,7 @@ class AnalysisOverlayService : Service() {
 
     // ── Result / Error ────────────────────────────────────────────────────
 
-    private fun setResult(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String) {
+    private fun setResult(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String, disclaimerLabel: String) {
         safetyTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         dotAnimator?.cancel()
 
@@ -282,7 +291,7 @@ class AnalysisOverlayService : Service() {
             ?.start()
 
         mainHandler.postDelayed({
-            showResultCard(verdict, vLabel, confidence, summary, detailLabel)
+            showResultCard(verdict, vLabel, confidence, summary, detailLabel, disclaimerLabel)
         }, 200)
 
         autoDismissRunnable = Runnable { dismissWithAnimation() }
@@ -305,7 +314,7 @@ class AnalysisOverlayService : Service() {
             ?.start()
 
         mainHandler.postDelayed({
-            showResultCard("error", errorLabel, "", message, closeLabel)
+            showResultCard("error", errorLabel, "", message, closeLabel, "")
         }, 200)
 
         autoDismissRunnable = Runnable { dismissWithAnimation() }
@@ -314,37 +323,42 @@ class AnalysisOverlayService : Service() {
 
     // ── Result card ──────────────────────────────────────────────────────
 
-    private fun showResultCard(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String) {
-        // Scrim — tap to dismiss
-        scrimView = View(this).apply {
-            setBackgroundColor(Color.parseColor("#55000000"))
-            alpha = 0f
+    private fun showResultCard(verdict: String, vLabel: String, confidence: String, summary: String, detailLabel: String, disclaimerLabel: String) {
+        val dark = isDarkMode()
+        val cardBg = if (dark) Color.parseColor("#1A1A1A") else Color.WHITE
+        val handleColor = if (dark) Color.parseColor("#444444") else Color.parseColor("#DDDDDD")
+        val closeBtnColor = if (dark) Color.parseColor("#AAAAAA") else Color.parseColor("#999999")
+        val dividerColor = if (dark) Color.parseColor("#333333") else Color.parseColor("#F0F0F0")
+        val summaryColor = if (dark) Color.parseColor("#CCCCCC") else Color.parseColor("#444444")
+
+        // Single full-screen window: scrim background + card at bottom.
+        // Using one window ensures touch events are reliably delivered.
+        val root = FrameLayout(this).apply {
+            // Tap on scrim (outside card) dismisses
             setOnClickListener { dismissWithAnimation() }
         }
-        windowManager?.addView(scrimView, WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            overlayType(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        ))
-        scrimView?.animate()?.alpha(1f)?.setDuration(350)?.start()
 
-        // Card root
-        val root = FrameLayout(this).apply {
+        // Card container at the bottom — 65% height
+        val cardContainer = FrameLayout(this).apply {
             clipChildren = false
             clipToPadding = false
             setPadding(0, dp(24), 0, 0)
+            // Prevent clicks on the card from propagating to the scrim
+            isClickable = true
         }
+        root.addView(cardContainer, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            (screenHeight() * 0.65).toInt()
+        ).apply { gravity = Gravity.BOTTOM })
 
         val wrapper = FrameLayout(this).apply {
             background = GradientDrawable().apply {
-                setColor(Color.WHITE)
+                setColor(cardBg)
                 cornerRadius = dp(28).toFloat()
             }
             elevation = dp(16).toFloat()
         }
-        root.addView(wrapper, FrameLayout.LayoutParams(
+        cardContainer.addView(wrapper, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ).apply {
@@ -372,7 +386,7 @@ class AnalysisOverlayService : Service() {
         // Handle bar (centered)
         val handle = View(this).apply {
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#DDDDDD"))
+                setColor(handleColor)
                 cornerRadius = dp(3).toFloat()
             }
             layoutParams = FrameLayout.LayoutParams(dp(36), dp(5)).apply {
@@ -386,7 +400,7 @@ class AnalysisOverlayService : Service() {
         val closeBtn = TextView(this).apply {
             text = "✕"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            setTextColor(Color.parseColor("#999999"))
+            setTextColor(closeBtnColor)
             gravity = Gravity.CENTER
             val s = dp(32)
             layoutParams = FrameLayout.LayoutParams(s, s).apply {
@@ -404,23 +418,20 @@ class AnalysisOverlayService : Service() {
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     startY = event.rawY
-                    startTransY = root.translationY
+                    startTransY = cardContainer.translationY
                     autoDismissRunnable?.let { mainHandler.removeCallbacks(it) }
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dy = event.rawY - startY
-                    if (dy > 0) root.translationY = startTransY + dy
-                    val progress = (root.translationY / dismissThreshold).coerceIn(0f, 1f)
-                    scrimView?.alpha = 1f - progress
+                    if (dy > 0) cardContainer.translationY = startTransY + dy
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (root.translationY > dismissThreshold) {
+                    if (cardContainer.translationY > dismissThreshold) {
                         dismissWithAnimation()
                     } else {
-                        root.animate().translationY(0f).setDuration(200).start()
-                        scrimView?.animate()?.alpha(1f)?.setDuration(200)?.start()
+                        cardContainer.animate().translationY(0f).setDuration(200).start()
                         // Restore auto-dismiss
                         autoDismissRunnable = Runnable { dismissWithAnimation() }
                         mainHandler.postDelayed(autoDismissRunnable!!, 15_000)
@@ -494,7 +505,7 @@ class AnalysisOverlayService : Service() {
 
         // Divider
         card.addView(View(this).apply {
-            setBackgroundColor(Color.parseColor("#F0F0F0"))
+            setBackgroundColor(dividerColor)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(1)
             ).apply { topMargin = dp(20); bottomMargin = dp(16) }
@@ -510,7 +521,7 @@ class AnalysisOverlayService : Service() {
         scrollView.addView(TextView(this).apply {
             text = summary
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Color.parseColor("#444444"))
+            setTextColor(summaryColor)
             setLineSpacing(dp(4).toFloat(), 1f)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -518,6 +529,18 @@ class AnalysisOverlayService : Service() {
             )
         })
         card.addView(scrollView)
+
+        // AI disclaimer
+        card.addView(TextView(this).apply {
+            text = disclaimerLabel
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(Color.parseColor("#9E9E9E"))
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(8); gravity = Gravity.CENTER_HORIZONTAL }
+        })
 
         // "View details" button — opens app
         if (verdict != "error") {
@@ -549,20 +572,33 @@ class AnalysisOverlayService : Service() {
             })
         }
 
-        // Window: 65% height
+        // Full-screen window containing scrim + card
         windowManager?.addView(root, WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            (screenHeight() * 0.65).toInt(),
+            WindowManager.LayoutParams.MATCH_PARENT,
             overlayType(),
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.BOTTOM })
+        ))
 
         resultOverlay = root
 
-        // Slide up
-        root.translationY = (screenHeight() * 0.65f)
-        root.animate()
+        // Animate scrim fade in + card slide up
+        cardContainer.translationY = (screenHeight() * 0.65f)
+
+        // Scrim fade
+        val scrimDrawable = android.graphics.drawable.ColorDrawable(Color.parseColor("#55000000"))
+        scrimDrawable.alpha = 0
+        root.background = scrimDrawable
+        ValueAnimator.ofInt(0, 255).apply {
+            duration = 350
+            addUpdateListener { scrimDrawable.alpha = it.animatedValue as Int }
+            start()
+        }
+
+        // Card slide up
+        cardContainer.animate()
             .translationY(0f)
             .setDuration(500)
             .setInterpolator(DecelerateInterpolator(2f))
@@ -576,14 +612,28 @@ class AnalysisOverlayService : Service() {
         isDismissing = true
         autoDismissRunnable?.let { mainHandler.removeCallbacks(it) }
 
-        scrimView?.animate()?.alpha(0f)?.setDuration(300)?.start()
-        resultOverlay?.animate()
-            ?.translationY(dp(600).toFloat())
-            ?.setDuration(400)
-            ?.setInterpolator(DecelerateInterpolator())
-            ?.withEndAction { stopSelf() }
-            ?.start()
-            ?: stopSelf()
+        // Safety: always stop the service even if animation fails
+        mainHandler.postDelayed({ stopSelf() }, 600)
+
+        // Fade out scrim
+        resultOverlay?.let { overlay ->
+            (overlay.background as? android.graphics.drawable.ColorDrawable)?.let { bg ->
+                ValueAnimator.ofInt(bg.alpha, 0).apply {
+                    duration = 300
+                    addUpdateListener { bg.alpha = it.animatedValue as Int }
+                    start()
+                }
+            }
+            // Slide card down
+            val cardView = (overlay as? FrameLayout)?.getChildAt(0)
+            cardView?.animate()
+                ?.translationY(dp(600).toFloat())
+                ?.setDuration(400)
+                ?.setInterpolator(DecelerateInterpolator())
+                ?.withEndAction { stopSelf() }
+                ?.start()
+                ?: stopSelf()
+        } ?: stopSelf()
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -595,10 +645,8 @@ class AnalysisOverlayService : Service() {
         safetyTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         autoDismissRunnable?.let { mainHandler.removeCallbacks(it) }
         loadingOverlay?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
-        scrimView?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
         resultOverlay?.let { try { windowManager?.removeView(it) } catch (_: Exception) {} }
         loadingOverlay = null
-        scrimView = null
         resultOverlay = null
         super.onDestroy()
     }

@@ -4,8 +4,14 @@ class PlatformChannel {
   static const _methods = MethodChannel('com.checkvar/methods');
   static const _events = EventChannel('com.checkvar/events');
 
-  static Future<void> startShakeService() async {
-    await _methods.invokeMethod('startShakeService');
+  static Future<void> startShakeService({
+    required String notificationTitle,
+    required String notificationBody,
+  }) async {
+    await _methods.invokeMethod('startShakeService', {
+      'notificationTitle': notificationTitle,
+      'notificationBody': notificationBody,
+    });
   }
 
   static Future<void> stopShakeService() async {
@@ -14,6 +20,10 @@ class PlatformChannel {
 
   static Future<void> setMode(String mode) async {
     await _methods.invokeMethod('setMode', {'mode': mode});
+  }
+
+  static Future<void> setDarkMode(bool isDark) async {
+    await _methods.invokeMethod('setDarkMode', {'isDark': isDark});
   }
 
   static Future<String?> getPendingText() async {
@@ -65,6 +75,7 @@ class PlatformChannel {
     required String confidence,
     required String summary,
     required String detailLabel,
+    required String disclaimerLabel,
   }) async {
     await _methods.invokeMethod('showAnalysisResult', {
       'verdict': verdict,
@@ -72,6 +83,7 @@ class PlatformChannel {
       'confidence': confidence,
       'summary': summary,
       'detailLabel': detailLabel,
+      'disclaimerLabel': disclaimerLabel,
     });
   }
 

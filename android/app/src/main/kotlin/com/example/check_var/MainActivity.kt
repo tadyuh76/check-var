@@ -49,6 +49,12 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "startShakeService" -> {
                         val intent = Intent(this, ShakeDetectorService::class.java)
+                        call.argument<String>("notificationTitle")?.let {
+                            intent.putExtra("notificationTitle", it)
+                        }
+                        call.argument<String>("notificationBody")?.let {
+                            intent.putExtra("notificationBody", it)
+                        }
                         startForegroundService(intent)
                         result.success(null)
                     }
@@ -60,6 +66,11 @@ class MainActivity : FlutterActivity() {
                     "setMode" -> {
                         val mode = call.argument<String>("mode") ?: "news"
                         bridge.mode = mode
+                        result.success(null)
+                    }
+                    "setDarkMode" -> {
+                        val isDark = call.argument<Boolean>("isDark") ?: false
+                        AnalysisOverlayService.appDarkMode = isDark
                         result.success(null)
                     }
                     "getPendingText" -> {
@@ -117,7 +128,8 @@ class MainActivity : FlutterActivity() {
                         val confidence = call.argument<String>("confidence") ?: ""
                         val summary = call.argument<String>("summary") ?: ""
                         val detailLabel = call.argument<String>("detailLabel") ?: "View details"
-                        AnalysisOverlayService.showResult(verdict, verdictLabel, confidence, summary, detailLabel)
+                        val disclaimerLabel = call.argument<String>("disclaimerLabel") ?: "AI can make mistakes"
+                        AnalysisOverlayService.showResult(verdict, verdictLabel, confidence, summary, detailLabel, disclaimerLabel)
                         result.success(null)
                     }
                     "showAnalysisError" -> {

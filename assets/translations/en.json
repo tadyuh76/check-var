@@ -79,6 +79,7 @@
     "label": "Confidence",
     "level": "Confidence: {}%"
   },
+  "ai_disclaimer": "AI can make mistakes",
   "news_check": {
     "result_title": "Check result",
     "no_data": "No data",
@@ -158,5 +159,9 @@
     "uncertain": "Unclear",
     "channel_results": "Check results",
     "channel_desc": "News check result notifications"
+  },
+  "service": {
+    "active_title": "CheckVar is active",
+    "active_body": "Shake your phone 3 times to check news"
   }
 }

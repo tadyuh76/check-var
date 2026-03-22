@@ -39,8 +39,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && _waitingForPermission) {
       _waitingForPermission = false;
-      _activateNewsCheck();
+      _retryActivateNewsCheck();
     }
+  }
+
+  Future<void> _retryActivateNewsCheck() async {
+    final granted = await _waitForAccessibility();
+    if (!granted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('home.accessibility_not_enabled'.tr())),
+        );
+      }
+      return;
+    }
+    _activateNewsCheck();
   }
 
   Future<void> _activateNewsCheck() async {
@@ -104,7 +117,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     // All permissions granted
-    await PlatformChannel.startShakeService();
+    await PlatformChannel.startShakeService(
+      notificationTitle: 'service.active_title'.tr(),
+      notificationBody: 'service.active_body'.tr(),
+    );
     await PlatformChannel.setMode('news');
     await core_channel.PlatformChannel.setNewsDetectionEnabled(true);
 
@@ -260,9 +276,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         await PlatformChannel.openAccessibilitySettings();
         // Wait for user to return from settings.
         await _waitForResume();
-        // Re-check after returning.
-        final granted =
-            await PlatformChannel.checkAccessibilityPermission();
+        // Re-check after returning (poll — Android may need time to start the service).
+        final granted = await _waitForAccessibility();
         if (!granted) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -340,6 +355,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
     WidgetsBinding.instance.addObserver(observer);
     return completer.future;
+  }
+
+  /// Polls for accessibility permission up to [maxRetries] times,
+  /// waiting [delay] between each check. Android may take a moment
+  /// to start the AccessibilityService after the user enables it.
+  Future<bool> _waitForAccessibility({
+    int maxRetries = 10,
+    Duration delay = const Duration(milliseconds: 300),
+  }) async {
+    for (var i = 0; i < maxRetries; i++) {
+      if (await PlatformChannel.checkAccessibilityPermission()) return true;
+      await Future.delayed(delay);
+    }
+    return false;
   }
 
   void _showInfoSheet(String title, String description) {

@@ -79,6 +79,7 @@ class NewsCheckController extends ChangeNotifier {
         confidence: confidenceStr,
         summary: result.summary,
         detailLabel: 'news_check.view_detail'.tr(),
+        disclaimerLabel: 'ai_disclaimer'.tr(),
       );
 
       // Save to history

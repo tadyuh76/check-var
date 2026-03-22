@@ -40,10 +40,13 @@ class ShakeDetectorService : Service(), SensorEventListener {
     private var lastShakeTime = 0L
     private var shakeCount = 0
     private var lastDetectionTime = 0L
+    private var notifTitle = "CheckVar is active"
+    private var notifBody = "Shake your phone 3 times to check news"
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        // Temporary notification — will be replaced in onStartCommand with localized strings.
         startForeground(NOTIFICATION_ID, buildNotification())
 
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -64,6 +67,11 @@ class ShakeDetectorService : Service(), SensorEventListener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        intent?.getStringExtra("notificationTitle")?.let { notifTitle = it }
+        intent?.getStringExtra("notificationBody")?.let { notifBody = it }
+        // Update the notification with localized strings.
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(NOTIFICATION_ID, buildNotification())
         return START_STICKY
     }
 
@@ -131,17 +139,15 @@ class ShakeDetectorService : Service(), SensorEventListener {
             CHANNEL_ID,
             "CheckVar Shake Detection",
             NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = "Dang theo doi lac dien thoai de kiem tra tin tuc"
-        }
+        )
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("CheckVar dang hoat dong")
-            .setContentText("Lac dien thoai 3 lan de kiem tra tin tuc")
+            .setContentTitle(notifTitle)
+            .setContentText(notifBody)
             .setSmallIcon(android.R.drawable.ic_menu_search)
             .setOngoing(true)
             .build()
