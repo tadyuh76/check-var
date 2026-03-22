@@ -68,6 +68,11 @@ class MainActivity : FlutterActivity() {
                         bridge.mode = mode
                         result.success(null)
                     }
+                    "setDarkMode" -> {
+                        val isDark = call.argument<Boolean>("isDark") ?: false
+                        AnalysisOverlayService.appDarkMode = isDark
+                        result.success(null)
+                    }
                     "getPendingText" -> {
                         val text = pendingScreenText
                         if (text != null) pendingScreenText = null

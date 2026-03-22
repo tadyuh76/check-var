@@ -52,6 +52,9 @@ class AnalysisOverlayService : Service() {
         fun showError(message: String, errorLabel: String = "Error", closeLabel: String = "Close") {
             mainHandler.post { instance?.setError(message, errorLabel, closeLabel) }
         }
+
+        /** Set by Flutter via setDarkMode — follows the app's theme, not system. */
+        var appDarkMode: Boolean = false
     }
 
     private var windowManager: WindowManager? = null
@@ -108,10 +111,7 @@ class AnalysisOverlayService : Service() {
 
     private fun screenHeight(): Int = resources.displayMetrics.heightPixels
 
-    private fun isDarkMode(): Boolean {
-        val uiMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
-        return uiMode == android.content.res.Configuration.UI_MODE_NIGHT_YES
-    }
+    private fun isDarkMode(): Boolean = appDarkMode
 
     private fun overlayType(): Int =
         if (CheckVarAccessibilityService.instance != null)

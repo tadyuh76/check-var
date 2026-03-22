@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../services/platform_channel.dart';
 
 class ThemeProvider extends ChangeNotifier {
   static const String _boxName = 'settings';
@@ -16,6 +17,7 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> _loadFromStorage() async {
     final box = await Hive.openBox(_boxName);
     _isDarkMode = box.get(_key, defaultValue: false);
+    _syncToNative();
     notifyListeners();
   }
 
@@ -23,6 +25,11 @@ class ThemeProvider extends ChangeNotifier {
     _isDarkMode = !_isDarkMode;
     final box = await Hive.openBox(_boxName);
     await box.put(_key, _isDarkMode);
+    _syncToNative();
     notifyListeners();
+  }
+
+  void _syncToNative() {
+    PlatformChannel.setDarkMode(_isDarkMode);
   }
 }

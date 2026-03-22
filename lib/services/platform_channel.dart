@@ -22,6 +22,10 @@ class PlatformChannel {
     await _methods.invokeMethod('setMode', {'mode': mode});
   }
 
+  static Future<void> setDarkMode(bool isDark) async {
+    await _methods.invokeMethod('setDarkMode', {'isDark': isDark});
+  }
+
   static Future<String?> getPendingText() async {
     return await _methods.invokeMethod<String>('getPendingText');
   }
