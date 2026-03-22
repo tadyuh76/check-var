@@ -223,12 +223,12 @@ def _classify_news(text, sources):
 
     tier_labels = {1: "⭐ OFFICIAL", 2: "✓ MAJOR", 3: "• KNOWN"}
     source_lines = []
-    for s in sources:
+    for idx, s in enumerate(sources):
         tier = s.get("tier", 99)
         badge = tier_labels.get(tier, "")
         date = s.get("date", "")
         date_str = f" ({date})" if date else ""
-        source_lines.append(f"- {badge} [{s['title']}]{date_str}: {s['snippet']}")
+        source_lines.append(f"[{idx}] {badge} [{s['title']}]{date_str}: {s['snippet']}")
     source_summary = "\n".join(source_lines) if source_lines else "(no sources available)"
 
     from datetime import date as _date
@@ -242,6 +242,7 @@ Rules:
 - More recent sources override older ones when contradicting
 - confidence: "very_high"|"high"|"medium"|"low"|"very_low" (based on source count+quality)
 - summary: 1-2 sentences in Vietnamese
+- relevant_sources: list of source indices [0,1,...] that are RELEVANT to the claim. Exclude sources that are about a different topic, person, or event.
 
 CLAIM:
 {truncated}
@@ -249,7 +250,7 @@ CLAIM:
 SOURCES:
 {source_summary}
 
-{{"verdict":"real|fake|uncertain","confidence":"...","summary":"..."}}"""
+{{"verdict":"real|fake|uncertain","confidence":"...","summary":"...","relevant_sources":[0,1,...]}}"""
 
     try:
         content = _openai_chat(
@@ -288,11 +289,19 @@ SOURCES:
         if not sources:
             summary = "Web search khong kha dung, ket qua chi dua tren AI.\n" + summary
 
+        # Filter to only relevant sources if AI provided indices
+        relevant_indices = parsed.get("relevant_sources")
+        if isinstance(relevant_indices, list) and relevant_indices:
+            valid_indices = {i for i in relevant_indices if isinstance(i, int) and 0 <= i < len(sources)}
+            filtered = [sources[i] for i in sorted(valid_indices)] if valid_indices else sources
+        else:
+            filtered = sources
+
         # Clean internal fields before returning to app
         clean_sources = [
             {"title": s["title"], "url": s["url"], "snippet": s["snippet"],
              **({"date": s["date"]} if s.get("date") else {})}
-            for s in sources
+            for s in filtered
         ]
 
         return {
